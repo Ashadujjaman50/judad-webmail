@@ -85,25 +85,154 @@ function matchAccount(addressString) {
   if (!addressString) return null;
   const str = addressString.toLowerCase();
 
-  // 1. Check exact match with configured accounts
   for (const acc of CONNECTED_ACCOUNTS) {
     if (str.includes(acc.toLowerCase())) {
       return acc;
     }
   }
 
-  // 2. Belongs to judadksa.com
   if (str.includes(`@${DOMAIN.toLowerCase()}`)) {
     return CONNECTED_ACCOUNTS[0];
   }
 
-  // 3. Other domains are strictly rejected
   return null;
 }
 
+// Helper: Sync Inbound Emails from Resend Receiving API
+let lastInboundSync = 0;
+async function syncInboundFromResend(db, force = false) {
+  const now = Date.now();
+  if (!force && now - lastInboundSync < 6000) {
+    return 0;
+  }
+  lastInboundSync = now;
+
+  try {
+    const listRes = await resend.emails.receiving.list();
+    const liveEmails = listRes?.data?.data || [];
+    let imported = 0;
+
+    for (const item of liveEmails) {
+      const fromLower = (item.from || '').toLowerCase();
+      const toLower = Array.isArray(item.to) ? item.to.join(' ').toLowerCase() : (item.to || '').toLowerCase();
+
+      // STRICT DOMAIN FILTER: Only judadksa.com
+      const belongs = fromLower.includes(`@${DOMAIN.toLowerCase()}`) || toLower.includes(`@${DOMAIN.toLowerCase()}`);
+      if (!belongs) continue;
+
+      let existing = db.emails.find(e => e.id === item.id || e.resend_id === item.id);
+
+      // If new OR if content is missing, fetch full content
+      if (!existing || !existing.html || !existing.text) {
+        let emailHtml = '';
+        let emailText = '';
+        try {
+          const full = await resend.emails.receiving.get(item.id);
+          if (full?.data) {
+            emailHtml = full.data.html || '';
+            emailText = full.data.text || '';
+          }
+        } catch (e) {
+          console.error('Error fetching receiving email content:', e);
+        }
+
+        const matchedAcc = matchAccount(toLower) || matchAccount(fromLower) || CONNECTED_ACCOUNTS[0];
+
+        if (!existing) {
+          existing = {
+            id: item.id,
+            resend_id: item.id,
+            folder: 'inbox',
+            account: matchedAcc,
+            from: item.from,
+            to: Array.isArray(item.to) ? item.to : [item.to],
+            subject: item.subject || '(No Subject)',
+            html: emailHtml || `<p>${emailText || ''}</p>`,
+            text: emailText || '',
+            status: 'delivered',
+            read: false,
+            created_at: item.created_at || new Date().toISOString()
+          };
+          db.emails.unshift(existing);
+          imported++;
+        } else {
+          existing.html = emailHtml || existing.html;
+          existing.text = emailText || existing.text;
+        }
+      }
+    }
+
+    writeDb(db);
+    return imported;
+  } catch (err) {
+    console.error('Inbound sync error:', err);
+    return 0;
+  }
+}
+
+// Helper: Sync Outbound Emails from Resend Emails API
+let lastOutboundSync = 0;
+async function syncOutboundFromResend(db, force = false) {
+  const now = Date.now();
+  if (!force && now - lastOutboundSync < 6000) {
+    return 0;
+  }
+  lastOutboundSync = now;
+
+  try {
+    const listRes = await resend.emails.list();
+    const liveEmails = listRes?.data?.data || [];
+    let imported = 0;
+
+    for (const item of liveEmails) {
+      const fromLower = (item.from || '').toLowerCase();
+      const toLower = Array.isArray(item.to) ? item.to.join(' ').toLowerCase() : (item.to || '').toLowerCase();
+
+      const belongs = fromLower.includes(`@${DOMAIN.toLowerCase()}`) || toLower.includes(`@${DOMAIN.toLowerCase()}`);
+      if (!belongs) continue;
+
+      let existing = db.emails.find(e => e.id === item.id || e.resend_id === item.id);
+      const matchedAcc = matchAccount(item.from) || matchAccount(toLower) || CONNECTED_ACCOUNTS[0];
+
+      if (!existing) {
+        existing = {
+          id: item.id,
+          resend_id: item.id,
+          folder: 'sent',
+          account: matchedAcc,
+          from: item.from,
+          to: item.to,
+          subject: item.subject || '(No Subject)',
+          html: null,
+          text: null,
+          status: item.last_event || 'sent',
+          read: true,
+          created_at: item.created_at || new Date().toISOString()
+        };
+        db.emails.unshift(existing);
+        imported++;
+      } else {
+        if (item.last_event && existing.status !== item.last_event) {
+          existing.status = item.last_event;
+        }
+      }
+    }
+
+    writeDb(db);
+    return imported;
+  } catch (err) {
+    console.error('Outbound sync error:', err);
+    return 0;
+  }
+}
+
 // 1. Get Accounts and Stats
-router.get('/accounts', (req, res) => {
+router.get('/accounts', async (req, res) => {
   const db = readDb();
+
+  // Keep counts updated from Resend
+  await syncInboundFromResend(db);
+
   const accountsData = CONNECTED_ACCOUNTS.map(email => {
     const unreadInbox = db.emails.filter(
       e => e.folder === 'inbox' && e.account === email && !e.read
@@ -186,36 +315,10 @@ router.get('/emails', async (req, res) => {
   const { folder = 'inbox', account = 'all', search = '' } = req.query;
   const db = readDb();
 
-  // If in serverless or sent folder is empty, auto-sync from Resend cloud
-  if (folder === 'sent' && db.emails.filter(e => e.folder === 'sent').length === 0) {
-    try {
-      const listRes = await resend.emails.list();
-      const liveEmails = listRes?.data?.data || [];
-      for (const item of liveEmails) {
-        const fromLower = (item.from || '').toLowerCase();
-        const toLower = Array.isArray(item.to) ? item.to.join(' ').toLowerCase() : (item.to || '').toLowerCase();
-        if (fromLower.includes(`@${DOMAIN.toLowerCase()}`) || toLower.includes(`@${DOMAIN.toLowerCase()}`)) {
-          const matchedAcc = matchAccount(item.from) || matchAccount(toLower) || CONNECTED_ACCOUNTS[0];
-          db.emails.push({
-            id: item.id,
-            resend_id: item.id,
-            folder: 'sent',
-            account: matchedAcc,
-            from: item.from,
-            to: item.to,
-            subject: item.subject || '(No Subject)',
-            html: null,
-            text: null,
-            status: item.last_event || 'sent',
-            read: true,
-            created_at: item.created_at || new Date().toISOString()
-          });
-        }
-      }
-      writeDb(db);
-    } catch (e) {
-      // ignore
-    }
+  if (folder === 'inbox') {
+    await syncInboundFromResend(db);
+  } else if (folder === 'sent') {
+    await syncOutboundFromResend(db);
   }
 
   let list = db.emails.filter(e => e.folder === folder);
@@ -246,34 +349,93 @@ router.get('/emails', async (req, res) => {
   });
 });
 
-// 4. Get Single Email
+// 4. Get Single Email with full content fetching
 router.get('/emails/:id', async (req, res) => {
   const { id } = req.params;
   const db = readDb();
-  const email = db.emails.find(e => e.id === id);
+  let email = db.emails.find(e => e.id === id || e.resend_id === id);
+
+  // If not found in local db, try to fetch directly from Resend Receiving
+  if (!email) {
+    try {
+      const rec = await resend.emails.receiving.get(id);
+      if (rec?.data) {
+        const toLower = Array.isArray(rec.data.to) ? rec.data.to.join(' ').toLowerCase() : (rec.data.to || '').toLowerCase();
+        email = {
+          id: rec.data.id,
+          resend_id: rec.data.id,
+          folder: 'inbox',
+          account: matchAccount(toLower) || CONNECTED_ACCOUNTS[0],
+          from: rec.data.from,
+          to: rec.data.to,
+          subject: rec.data.subject || '(No Subject)',
+          html: rec.data.html || `<p>${rec.data.text || ''}</p>`,
+          text: rec.data.text || '',
+          status: 'delivered',
+          read: true,
+          created_at: rec.data.created_at || new Date().toISOString()
+        };
+        db.emails.unshift(email);
+        writeDb(db);
+      }
+    } catch (e) {
+      // Check Sent API
+      try {
+        const sent = await resend.emails.get(id);
+        if (sent?.data) {
+          email = {
+            id: sent.data.id,
+            resend_id: sent.data.id,
+            folder: 'sent',
+            account: matchAccount(sent.data.from) || CONNECTED_ACCOUNTS[0],
+            from: sent.data.from,
+            to: sent.data.to,
+            subject: sent.data.subject || '(No Subject)',
+            html: sent.data.html,
+            text: sent.data.text,
+            status: sent.data.last_event || 'sent',
+            read: true,
+            created_at: sent.data.created_at || new Date().toISOString()
+          };
+          db.emails.unshift(email);
+          writeDb(db);
+        }
+      } catch (err) {}
+    }
+  }
 
   if (!email) {
     return res.status(404).json({ error: 'Email not found' });
   }
 
+  // Ensure content is populated if missing
+  const resendId = email.resend_id || (email.id.startsWith('inbound-') || email.id.startsWith('sim-') ? null : email.id);
+  if (resendId && (!email.html || !email.text || email.text.trim() === '')) {
+    if (email.folder === 'inbox') {
+      try {
+        const liveRec = await resend.emails.receiving.get(resendId);
+        if (liveRec?.data) {
+          email.html = liveRec.data.html || email.html;
+          email.text = liveRec.data.text || email.text;
+          writeDb(db);
+        }
+      } catch (e) {}
+    } else if (email.folder === 'sent') {
+      try {
+        const liveSent = await resend.emails.get(resendId);
+        if (liveSent?.data) {
+          email.html = liveSent.data.html || email.html;
+          email.text = liveSent.data.text || email.text;
+          email.status = liveSent.data.last_event || email.status;
+          writeDb(db);
+        }
+      } catch (e) {}
+    }
+  }
+
   if (!email.read) {
     email.read = true;
     writeDb(db);
-  }
-
-  // If it's a sent email with a resend ID, try to get live update if needed
-  if (email.resend_id && !email.html) {
-    try {
-      const live = await resend.emails.get(email.resend_id);
-      if (live?.data) {
-        email.html = live.data.html || email.html;
-        email.text = live.data.text || email.text;
-        email.status = live.data.last_event || email.status;
-        writeDb(db);
-      }
-    } catch (err) {
-      // ignore
-    }
   }
 
   res.json({ email });
@@ -357,14 +519,15 @@ router.post('/emails/send', async (req, res) => {
 });
 
 // 6. Webhook Endpoint for Resend (Inbound and Event delivery updates)
-router.post('/webhook', (req, res) => {
+router.post('/webhook', async (req, res) => {
   try {
     const payload = req.body;
     const db = readDb();
 
-    // Event 1: Inbound Email
+    // Event 1: Inbound Email (email.received or email.inbound)
     if (payload?.type === 'email.inbound' || payload?.type === 'email.received' || payload?.email) {
       const emailData = payload.data || payload;
+      const emailId = emailData.email_id || emailData.id;
       const recipient = Array.isArray(emailData.to) ? emailData.to[0] : (emailData.to || '');
       const matchedAcc = matchAccount(recipient);
 
@@ -372,15 +535,41 @@ router.post('/webhook', (req, res) => {
         return res.json({ ignored: true, reason: `Recipient not belonging to ${DOMAIN}` });
       }
 
+      let emailHtml = emailData.html || '';
+      let emailText = emailData.text || '';
+
+      // Fetch actual message body from Resend Receiving API
+      if (emailId) {
+        try {
+          const fullEmail = await resend.emails.receiving.get(emailId);
+          if (fullEmail?.data) {
+            emailHtml = fullEmail.data.html || emailHtml;
+            emailText = fullEmail.data.text || emailText;
+          }
+        } catch (err) {
+          console.error('Error fetching inbound email content in webhook:', err);
+        }
+      }
+
+      // Check if already in db
+      const existing = db.emails.find(e => (emailId && (e.id === emailId || e.resend_id === emailId)));
+      if (existing) {
+        existing.html = emailHtml || existing.html;
+        existing.text = emailText || existing.text;
+        writeDb(db);
+        return res.json({ success: true, action: 'inbound_updated', id: existing.id });
+      }
+
       const inboundEmail = {
-        id: emailData.id || `inbound-${Date.now()}`,
+        id: emailId || `inbound-${Date.now()}`,
+        resend_id: emailId,
         folder: 'inbox',
         account: matchedAcc,
         from: emailData.from || 'Unknown Sender',
         to: Array.isArray(emailData.to) ? emailData.to : [emailData.to],
         subject: emailData.subject || '(No Subject)',
-        html: emailData.html || `<p>${emailData.text || ''}</p>`,
-        text: emailData.text || '',
+        html: emailHtml || `<p>${emailText || ''}</p>`,
+        text: emailText || '',
         status: 'delivered',
         read: false,
         created_at: emailData.created_at || new Date().toISOString()
@@ -448,61 +637,19 @@ router.post('/emails/simulate-inbound', (req, res) => {
   });
 });
 
-// 8. Sync sent emails from Resend (STRICTLY for judadksa.com ONLY)
+// 8. Sync sent AND received emails from Resend (STRICTLY for judadksa.com ONLY)
 router.post('/emails/sync-resend', async (req, res) => {
   try {
-    const listRes = await resend.emails.list();
-    const liveEmails = listRes?.data?.data || [];
     const db = readDb();
-    let importedCount = 0;
-    let skippedOtherDomainsCount = 0;
+    const inboundCount = await syncInboundFromResend(db, true);
+    const outboundCount = await syncOutboundFromResend(db, true);
 
-    for (const item of liveEmails) {
-      const fromLower = (item.from || '').toLowerCase();
-      const toLower = Array.isArray(item.to) ? item.to.join(' ').toLowerCase() : (item.to || '').toLowerCase();
-
-      const belongsToDomain = fromLower.includes(`@${DOMAIN.toLowerCase()}`) ||
-                              toLower.includes(`@${DOMAIN.toLowerCase()}`);
-
-      if (!belongsToDomain) {
-        skippedOtherDomainsCount++;
-        continue;
-      }
-
-      const exists = db.emails.find(e => e.resend_id === item.id || e.id === item.id);
-      const matchedAcc = matchAccount(item.from) || matchAccount(toLower) || CONNECTED_ACCOUNTS[0];
-
-      if (!exists) {
-        db.emails.push({
-          id: item.id,
-          resend_id: item.id,
-          folder: 'sent',
-          account: matchedAcc,
-          from: item.from,
-          to: item.to,
-          subject: item.subject || '(No Subject)',
-          html: null,
-          text: null,
-          status: item.last_event || 'sent',
-          read: true,
-          created_at: item.created_at || new Date().toISOString()
-        });
-        importedCount++;
-      } else {
-        if (item.last_event && exists.status !== item.last_event) {
-          exists.status = item.last_event;
-        }
-      }
-    }
-
-    writeDb(db);
     res.json({
       success: true,
-      message: `Resend থেকে শুধুমাত্র ${DOMAIN} এর ${importedCount} টি ইমেইল সিঙ্ক হয়েছে (${skippedOtherDomainsCount} টি অন্য ডোমেইনের ইমেইল বাদ দেওয়া হয়েছে)`,
+      message: `Resend থেকে ${inboundCount} টি ইনবক্স ও ${outboundCount} টি সেন্টবক্স ইমেইল কনটেন্টসহ সিঙ্ক হয়েছে`,
       domain: DOMAIN,
-      importedCount,
-      skippedOtherDomainsCount,
-      totalResendEmails: liveEmails.length
+      inboundCount,
+      outboundCount
     });
   } catch (error) {
     console.error('Sync error:', error);
