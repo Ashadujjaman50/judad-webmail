@@ -508,7 +508,7 @@ router.post('/emails/send', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'ইমেইল সফলভাবে পাঠানো হয়েছে!',
+      message: 'Email sent successfully!',
       email: newSentEmail,
       resendResponse: result.data
     });
@@ -632,7 +632,7 @@ router.post('/emails/simulate-inbound', (req, res) => {
 
   res.json({
     success: true,
-    message: `টেস্ট ইমেইলটি সফলভাবে ${targetAccount} ইনবক্সে গ্রহণ করা হয়েছে!`,
+    message: `Test email successfully received into ${targetAccount} inbox!`,
     email: simulated
   });
 });
@@ -646,7 +646,7 @@ router.post('/emails/sync-resend', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Resend থেকে ${inboundCount} টি ইনবক্স ও ${outboundCount} টি সেন্টবক্স ইমেইল কনটেন্টসহ সিঙ্ক হয়েছে`,
+      message: `Successfully synced ${inboundCount} inbox and ${outboundCount} sent emails with content from Resend`,
       domain: DOMAIN,
       inboundCount,
       outboundCount

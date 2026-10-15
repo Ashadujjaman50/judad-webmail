@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="bn">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +7,7 @@
   <meta name="description" content="Node.js Webmail system integrated with Resend API for info@judadksa.com, admin@judadksa.com, and support@judadksa.com">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✉️</text></svg>">
 </head>
@@ -29,9 +29,9 @@
           </div>
         </div>
 
-        <div class="domain-pill" id="domainStatusPill" title="ডোমেইন স্ট্যাটাস: শুধুমাত্র judadksa.com সংরক্ষিত">
+        <div class="domain-pill" id="domainStatusPill" title="Domain Status: Dedicated to judadksa.com">
           <span class="status-dot"></span>
-          <span class="status-text">judadksa.com • শুধু এই ডোমেইন সক্রিয়</span>
+          <span class="status-text">judadksa.com • Active Domain</span>
         </div>
       </div>
 
@@ -41,42 +41,42 @@
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <input type="text" id="searchInput" placeholder="ইমেইল, বিষয় বা প্রেরক খুঁজুন..." autocomplete="off">
-          <button id="clearSearchBtn" class="clear-search-btn" title="মুছুন" style="display:none;">&times;</button>
+          <input type="text" id="searchInput" placeholder="Search emails by subject, sender, or content..." autocomplete="off">
+          <button id="clearSearchBtn" class="clear-search-btn" title="Clear search" style="display:none;">&times;</button>
         </div>
       </div>
 
       <div class="header-right">
-        <button id="syncResendBtn" class="btn btn-secondary" title="Resend থেকে ইমেইল সিঙ্ক করুন">
+        <button id="syncResendBtn" class="btn btn-secondary" title="Sync emails directly from Resend">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"></polyline>
             <polyline points="1 20 1 14 7 14"></polyline>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
           </svg>
-          <span>সিঙ্ক</span>
+          <span>Sync</span>
         </button>
 
-        <button id="simulateInboundBtn" class="btn btn-accent" title="টেস্ট ইনকামিং ইমেইল পাঠিয়ে দেখুন">
+        <button id="simulateInboundBtn" class="btn btn-accent" title="Simulate a test incoming email">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 11 12 14 22 4"></polyline>
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
           </svg>
-          <span>টেস্ট ইনবক্স</span>
+          <span>Test Inbox</span>
         </button>
 
-        <button id="domainInfoBtn" class="btn btn-icon" title="ডোমেইন ও ওয়েবহুক কনফিগারেশন">
+        <button id="domainInfoBtn" class="btn btn-icon" title="Domain and Webhook Configuration">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>
         </button>
 
-        <button id="openComposeBtn" class="btn btn-primary" title="নতুন ইমেইল পাঠান">
+        <button id="openComposeBtn" class="btn btn-primary" title="Compose New Email">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          <span>নতুন ইমেইল</span>
+          <span>Compose</span>
         </button>
       </div>
     </header>
@@ -87,7 +87,7 @@
       <aside class="sidebar" id="sidebar">
         <!-- Connected Accounts Section -->
         <div class="sidebar-section">
-          <div class="sidebar-label">সংযুক্ত ইমেইল একাউন্টসমূহ</div>
+          <div class="sidebar-label">Connected Accounts</div>
           <div class="account-list" id="accountList">
             <!-- Populated dynamically via JS -->
             <button class="account-item active" data-account="all">
@@ -99,7 +99,7 @@
                 </svg>
               </div>
               <div class="account-details">
-                <span class="account-name">সকল ইনবক্স</span>
+                <span class="account-name">All Inboxes</span>
                 <span class="account-desc">Unified View</span>
               </div>
               <span class="badge" id="badgeAllInbox">0</span>
@@ -109,7 +109,7 @@
 
         <!-- Folders Section -->
         <div class="sidebar-section">
-          <div class="sidebar-label">ফোল্ডার</div>
+          <div class="sidebar-label">Folders</div>
           <nav class="folder-nav">
             <button class="folder-item active" data-folder="inbox" id="folderInboxBtn">
               <div class="folder-left">
@@ -117,7 +117,7 @@
                   <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
                   <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
                 </svg>
-                <span>ইনবক্স (Inbox)</span>
+                <span>Inbox</span>
               </div>
               <span class="badge unread-badge" id="currentFolderInboxBadge">0</span>
             </button>
@@ -128,7 +128,7 @@
                   <line x1="22" y1="2" x2="11" y2="13"></line>
                   <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
-                <span>সেন্ট বক্স (Sent)</span>
+                <span>Sent</span>
               </div>
               <span class="badge" id="currentFolderSentBadge">0</span>
             </button>
@@ -139,7 +139,7 @@
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
-                <span>ট্র্যাশ (Trash)</span>
+                <span>Trash</span>
               </div>
               <span class="badge" id="currentFolderTrashBadge">0</span>
             </button>
@@ -176,13 +176,13 @@
       <section class="message-list-col" id="messageListCol">
         <div class="message-list-header">
           <div class="list-title-wrap">
-            <h2 id="currentViewTitle">ইনবক্স</h2>
-            <span class="email-count-pill" id="emailCountPill">0 টি ইমেইল</span>
+            <h2 id="currentViewTitle">Inbox</h2>
+            <span class="email-count-pill" id="emailCountPill">0 emails</span>
           </div>
 
           <div class="filter-tabs">
-            <button class="filter-btn active" data-filter="all" id="filterAllBtn">সব</button>
-            <button class="filter-btn" data-filter="unread" id="filterUnreadBtn">অপঠিত</button>
+            <button class="filter-btn active" data-filter="all" id="filterAllBtn">All</button>
+            <button class="filter-btn" data-filter="unread" id="filterUnreadBtn">Unread</button>
           </div>
         </div>
 
@@ -190,7 +190,7 @@
         <div class="email-items-container" id="emailItemsContainer">
           <div class="loading-state">
             <div class="spinner"></div>
-            <span>ইমেইল লোড হচ্ছে...</span>
+            <span>Loading emails...</span>
           </div>
         </div>
       </section>
@@ -205,14 +205,14 @@
               <polyline points="22,6 12,13 2,6"></polyline>
             </svg>
           </div>
-          <h3>কোনো ইমেইল নির্বাচন করা হয়নি</h3>
-          <p>পড়ার জন্য বামপাশের তালিকা থেকে যেকোনো একটি ইমেইলে ক্লিক করুন</p>
+          <h3>No Email Selected</h3>
+          <p>Select an email from the list on the left to read its contents</p>
           <button class="btn btn-outline-primary" id="emptyComposeTrigger">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            নতুন ইমেইল তৈরি করুন
+            Compose New Email
           </button>
         </div>
 
@@ -221,37 +221,37 @@
           <!-- Detail Actions Bar -->
           <div class="detail-actions-bar">
             <div class="detail-left-actions">
-              <button class="btn btn-sm btn-outline" id="replyBtn" title="উওর দিন (Reply)">
+              <button class="btn btn-sm btn-outline" id="replyBtn" title="Reply to sender">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="9 17 4 12 9 7"></polyline>
                   <path d="M20 18v-2a4 4 0 0 0-4-4H4"></path>
                 </svg>
-                <span>উত্তর দিন</span>
+                <span>Reply</span>
               </button>
 
-              <button class="btn btn-sm btn-outline" id="forwardBtn" title="ফরওয়ার্ড করুন">
+              <button class="btn btn-sm btn-outline" id="forwardBtn" title="Forward email">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="15 17 20 12 15 7"></polyline>
                   <path d="M4 18v-2a4 4 0 0 1 4-4h12"></path>
                 </svg>
-                <span>ফরওয়ার্ড</span>
+                <span>Forward</span>
               </button>
 
-              <button class="btn btn-sm btn-outline" id="toggleReadBtn" title="পঠিত/অপঠিত চিহ্নিত করুন">
+              <button class="btn btn-sm btn-outline" id="toggleReadBtn" title="Toggle read/unread status">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="10"></circle>
                 </svg>
-                <span id="toggleReadLabel">অপঠিত করুন</span>
+                <span id="toggleReadLabel">Mark Unread</span>
               </button>
             </div>
 
             <div class="detail-right-actions">
-              <button class="btn btn-sm btn-danger-outline" id="deleteEmailBtn" title="মুছে ফেলুন">
+              <button class="btn btn-sm btn-danger-outline" id="deleteEmailBtn" title="Delete email">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
-                <span>মুছুন</span>
+                <span>Delete</span>
               </button>
             </div>
           </div>
@@ -260,7 +260,7 @@
           <div class="detail-scroll-area">
             <!-- Subject Header -->
             <div class="detail-subject-header">
-              <h1 id="detailSubject">ইমেইল বিষয়</h1>
+              <h1 id="detailSubject">Subject Line</h1>
               <div class="detail-meta-tags">
                 <span class="tag-account" id="detailAccountBadge">info@judadksa.com</span>
                 <span class="tag-status" id="detailStatusBadge">Delivered</span>
@@ -277,12 +277,12 @@
                   <span class="sender-email" id="detailFromEmail">&lt;sender@email.com&gt;</span>
                 </div>
                 <div class="sender-to-line">
-                  <span>প্রতি (To):</span>
+                  <span>To:</span>
                   <span id="detailToEmail">recipient@email.com</span>
                 </div>
               </div>
               <div class="sender-date-col">
-                <time id="detailDate">Oct 15, 2026, 4:30 PM</time>
+                <time id="detailDate">Oct 16, 2026, 12:00 AM</time>
               </div>
             </div>
 
@@ -319,15 +319,15 @@
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
           </svg>
-          <h3>নতুন ইমেইল পাঠান (Send Email via Resend)</h3>
+          <h3>Compose New Email</h3>
         </div>
         <button class="modal-close-btn" id="closeComposeBtn">&times;</button>
       </div>
 
       <form id="composeForm" class="compose-form">
-        <!-- From Field (Select from 3 accounts) -->
+        <!-- From Field -->
         <div class="form-group">
-          <label for="composeFromSelect">প্রেরক (From Account):</label>
+          <label for="composeFromSelect">From Account:</label>
           <div class="select-wrapper">
             <select id="composeFromSelect" required>
               <option value="info@judadksa.com" selected>info@judadksa.com (Judad Info)</option>
@@ -335,24 +335,24 @@
               <option value="support@judadksa.com">support@judadksa.com (Judad Support)</option>
             </select>
           </div>
-          <span class="input-hint">আপনার ভেরিফাইড ডোমেইন <strong>judadksa.com</strong> থেকে বিশ্বস্ত ইমেইল হিসেবে পাঠানো হবে।</span>
+          <span class="input-hint">Sent as verified mail from authenticated domain <strong>judadksa.com</strong>.</span>
         </div>
 
         <!-- To Field -->
         <div class="form-group">
-          <label for="composeToInput">প্রাপক (To):</label>
+          <label for="composeToInput">To:</label>
           <input type="email" id="composeToInput" placeholder="recipient@example.com" required>
         </div>
 
         <!-- Subject Field -->
         <div class="form-group">
-          <label for="composeSubjectInput">বিষয় (Subject):</label>
-          <input type="text" id="composeSubjectInput" placeholder="ইমেইলের বিষয় লিখুন..." required>
+          <label for="composeSubjectInput">Subject:</label>
+          <input type="text" id="composeSubjectInput" placeholder="Enter email subject..." required>
         </div>
 
         <!-- Quick Templates -->
         <div class="quick-templates">
-          <span class="template-label">কুইক টেমপ্লেট:</span>
+          <span class="template-label">Quick Templates:</span>
           <button type="button" class="btn-template" data-tpl="welcome">Welcome Mail</button>
           <button type="button" class="btn-template" data-tpl="support">Support Response</button>
           <button type="button" class="btn-template" data-tpl="quote">Official Proposal</button>
@@ -361,28 +361,28 @@
         <!-- Body Message Field -->
         <div class="form-group body-group">
           <div class="body-header">
-            <label for="composeMessageInput">বার্তা (Message Content):</label>
+            <label for="composeMessageInput">Message Body:</label>
             <div class="format-toggle">
               <span class="active" id="formatHtmlTag">HTML Supported</span>
             </div>
           </div>
-          <textarea id="composeMessageInput" rows="9" placeholder="আপনার বার্তাটি এখানে লিখুন... (HTML ট্যাগ যেমন <b>, <p>, <ul> ইত্যাদি কাজ করবে)" required></textarea>
+          <textarea id="composeMessageInput" rows="9" placeholder="Type your message here... (HTML tags like <b>, <p>, <ul> etc. supported)" required></textarea>
         </div>
 
         <!-- Compose Footer -->
         <div class="compose-footer">
           <div class="footer-note">
-            <span>🚀 Resend API দিয়ে সরাসরি ডেলিভারি নিশ্চিত হবে</span>
+            <span>🚀 Direct delivery powered by Resend API</span>
           </div>
           <div class="footer-actions">
-            <button type="button" class="btn btn-secondary" id="cancelComposeBtn">বাতিল</button>
+            <button type="button" class="btn btn-secondary" id="cancelComposeBtn">Cancel</button>
             <button type="submit" class="btn btn-primary" id="submitSendBtn">
               <span class="btn-content">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="22" y1="2" x2="11" y2="13"></line>
                   <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
-                <span>পাঠিয়ে দিন (Send)</span>
+                <span>Send Email</span>
               </span>
               <span class="btn-spinner" style="display:none;"></span>
             </button>
@@ -398,18 +398,18 @@
       <div class="modal-header">
         <div class="modal-header-title">
           <span class="modal-icon-badge">📥</span>
-          <h3>টেস্ট ইনকামিং ইমেইল সিমুলেশন</h3>
+          <h3>Test Inbound Email Simulator</h3>
         </div>
         <button class="modal-close-btn" id="closeInboundBtn">&times;</button>
       </div>
 
       <p class="modal-subtitle">
-        যেকোনো প্রেরক সেজে আপনার ৩টি অ্যাকাউন্টের যেটিতে খুশি টেস্ট ইমেইল গ্রহণ করে ইনবক্স চেক করুন:
+        Simulate an incoming email to test your inbox immediately:
       </p>
 
       <form id="inboundSimForm" class="standard-form">
         <div class="form-group">
-          <label for="inboundTargetAccount">কোন ইনবক্সে পাঠাতে চান?</label>
+          <label for="inboundTargetAccount">Target Inbox Account:</label>
           <select id="inboundTargetAccount" required>
             <option value="info@judadksa.com">info@judadksa.com (Judad Info)</option>
             <option value="admin@judadksa.com">admin@judadksa.com (Judad Admin)</option>
@@ -418,17 +418,17 @@
         </div>
 
         <div class="form-group">
-          <label for="inboundSender">কাল্পনিক প্রেরকের নাম ও ইমেইল (From):</label>
+          <label for="inboundSender">Sender Name & Email (From):</label>
           <input type="text" id="inboundSender" value="Client Partner <partner@saudibiz.com>" required>
         </div>
 
         <div class="form-group">
-          <label for="inboundSubject">বিষয় (Subject):</label>
+          <label for="inboundSubject">Subject:</label>
           <input type="text" id="inboundSubject" value="Urgent: Partnership proposal & quote request" required>
         </div>
 
         <div class="form-group">
-          <label for="inboundMessage">বার্তা (Message Body):</label>
+          <label for="inboundMessage">Message Body:</label>
           <textarea id="inboundMessage" rows="4" required>Hello Judad Team,
 
 We are interested in discussing business cooperation regarding your services in Saudi Arabia. Could you please share your latest brochure and quotation?
@@ -439,9 +439,9 @@ Director of Operations</textarea>
         </div>
 
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" id="cancelInboundBtn">বাতিল</button>
+          <button type="button" class="btn btn-secondary" id="cancelInboundBtn">Cancel</button>
           <button type="submit" class="btn btn-accent" id="submitInboundBtn">
-            <span>ইনবক্সে গ্রহণ করুন</span>
+            <span>Simulate Receive</span>
           </button>
         </div>
       </form>
@@ -454,7 +454,7 @@ Director of Operations</textarea>
       <div class="modal-header">
         <div class="modal-header-title">
           <span class="modal-icon-badge">🌐</span>
-          <h3>ডোমেইন ও Resend কনফিগারেশন বিবরণী</h3>
+          <h3>Domain & Resend Configuration</h3>
         </div>
         <button class="modal-close-btn" id="closeDomainModalBtn">&times;</button>
       </div>
@@ -462,66 +462,66 @@ Director of Operations</textarea>
       <div class="config-modal-body">
         <!-- Live Domain Info -->
         <div class="config-card">
-          <div class="config-card-title">ডোমেইন তথ্য (Resend Verified)</div>
+          <div class="config-card-title">Domain Details (Resend Verified)</div>
           <div class="config-grid">
-            <div><strong>টার্গেট ডোমেইন:</strong> judadksa.com</div>
-            <div><strong>স্ট্যাটাস:</strong> <span class="badge-success">Verified</span></div>
-            <div><strong>আউটবাউন্ড সেন্ডিং:</strong> <span class="badge-success">Enabled</span></div>
-            <div><strong>রিজিয়ন:</strong> Tokyo (ap-northeast-1)</div>
+            <div><strong>Target Domain:</strong> judadksa.com</div>
+            <div><strong>Status:</strong> <span class="badge-success">Verified</span></div>
+            <div><strong>Outbound Sending:</strong> <span class="badge-success">Enabled</span></div>
+            <div><strong>Region:</strong> Tokyo (ap-northeast-1)</div>
           </div>
         </div>
 
         <!-- Strict Domain Filter Notice -->
         <div class="config-card" style="border-left: 3px solid #3b82f6;">
-          <div class="config-card-title" style="color: #60a5fa;">🛡️ ডোমেইন আইসোলেশন ও ফিল্টারিং সক্রিয়</div>
+          <div class="config-card-title" style="color: #60a5fa;">🛡️ Domain Isolation Active</div>
           <p class="config-p" style="margin-bottom: 0;">
-            আপনার Resend অ্যাকাউন্টে একাধিক ডোমেইন কানেক্ট করা থাকলেও, এই সিস্টেমে শুধুমাত্র <strong>judadksa.com</strong> এর ইমেইলগুলোই ফিল্টার হয়ে আসবে। অন্য কোনো ডোমেইনের মেইল এখানে সিঙ্ক হবে না বা সেন্ড/রিসিভ করা যাবে না।
+            Even if multiple domains are connected to your Resend account, this system exclusively filters and processes emails for <strong>judadksa.com</strong>. Other domains are completely excluded.
           </p>
         </div>
 
         <!-- Connected Email Addresses -->
         <div class="config-card">
-          <div class="config-card-title">৩টি সংযুক্ত ইমেইল অ্যাড্রেস</div>
+          <div class="config-card-title">3 Connected Email Addresses</div>
           <ul class="email-bullet-list">
             <li>
               <code>info@judadksa.com</code>
-              <span class="bullet-note">সাধারণ তথ্য ও সাধারণ অনুসন্ধানের জন্য</span>
+              <span class="bullet-note">General information and inquiries</span>
             </li>
             <li>
               <code>admin@judadksa.com</code>
-              <span class="bullet-note">সিস্টেম সতর্কতা ও অ্যাডমিনিস্ট্রেশন</span>
+              <span class="bullet-note">Administrative and system alerts</span>
             </li>
             <li>
               <code>support@judadksa.com</code>
-              <span class="bullet-note">গ্রাহক সহায়তা ও সাপোর্ট টিকিট</span>
+              <span class="bullet-note">Customer support and helpdesk</span>
             </li>
           </ul>
         </div>
 
         <!-- Inbound Webhook Instructions -->
         <div class="config-card">
-          <div class="config-card-title">রিয়েল-টাইম Webhook সংযোগ (Inbound & Delivery Updates)</div>
+          <div class="config-card-title">Real-Time Webhook Endpoint</div>
           <p class="config-p">
-            Resend ড্যাশবোর্ডে গিয়ে <strong>Webhooks</strong> অপশনে আপনার পাবলিক সার্ভার URL যোগ করতে পারেন:
+            Add this endpoint URL in your Resend Dashboard under <strong>Webhooks</strong>:
           </p>
           <div class="code-copy-box">
-            <code id="webhookUrlCode">https://your-domain-or-tunnel.com/api/webhook</code>
-            <button class="btn btn-sm btn-secondary" id="copyWebhookBtn">কপি করুন</button>
+            <code id="webhookUrlCode">https://judadmail.netlify.app/api/webhook</code>
+            <button class="btn btn-sm btn-secondary" id="copyWebhookBtn">Copy URL</button>
           </div>
-          <small class="text-muted">এই Webhook টি আপনার সার্ভারে স্বয়ংক্রিয়ভাবে ইমেইল ডেলিভারি স্ট্যাটাস (Delivered, Bounced, Opened) এবং ইনবাউন্ড ইমেইল আপডেট করবে।</small>
+          <small class="text-muted">This webhook automatically receives incoming emails and updates delivery statuses (Delivered, Bounced) in real time.</small>
         </div>
 
         <!-- Inbound MX note -->
         <div class="config-card">
-          <div class="config-card-title">বাইরের জিমেইল বা অন্য মেইল থেকে সরাসরি ইনবক্সে মেইল গ্রহণ করতে:</div>
+          <div class="config-card-title">Receiving Emails from External Mailboxes (Gmail, Outlook):</div>
           <p class="config-p">
-            আউটগোয়িং মেইল ইতিমধ্যেই সম্পূর্ণ সক্রিয় রয়েছে। যদি আপনি বাইরের সাধারণ মানুষের পাঠানো মেইলও সরাসরি Resend এর মাধ্যমে রিসিভ করতে চান, তবে আপনার ডোমেইন কন্ট্রোল প্যানেলে Resend এর নির্দেশিত ইনবাউন্ড MX রেকর্ডটি যোগ করে নিলেই সরাসরি রিয়েল মেইল ইনবক্সে আসতে শুরু করবে।
+            Ensure your DNS MX record is pointed to <code>inbound-smtp.ap-northeast-1.amazonaws.com</code> with priority 10, and Receiving is enabled in your Resend domain settings.
           </p>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn btn-primary" id="confirmDomainModalBtn">ঠিক আছে</button>
+        <button type="button" class="btn btn-primary" id="confirmDomainModalBtn">Close</button>
       </div>
     </div>
   </div>

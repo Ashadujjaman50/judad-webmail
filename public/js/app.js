@@ -99,19 +99,19 @@
     toastContainer: document.getElementById('toastContainer')
   };
 
-  // Pre-built Quick Templates
+  // Pre-built Quick Templates (100% English)
   const templates = {
     welcome: {
-      subject: 'Judad KSA তে আপনাকে স্বাগতম!',
-      body: `<p>প্রিয় গ্রাহক,</p><p><strong>Judad KSA</strong>-এর পক্ষ থেকে আপনাকে আন্তরিক শুভেচ্ছা ও ধন্যবাদ।</p><p>আমরা সবসময় গ্রাহক সন্তুষ্টিকে সর্বোচ্চ গুরুত্ব দিয়ে থাকি। আমাদের সেবাসমূহ সম্পর্কে যেকোনো তথ্য বা সহায়তার জন্য সরাসরি এই ইমেইলে রিপ্লাই দিতে পারেন।</p><p>ধন্যবাদান্তে,<br/><strong>টিম Judad KSA</strong><br/>ওয়েবসাইট: judadksa.com</p>`
+      subject: 'Welcome to Judad KSA!',
+      body: `<p>Dear Valued Client,</p><p>Welcome to <strong>Judad KSA</strong>. We are delighted to have you with us.</p><p>We are committed to delivering top-tier solutions. If you have any questions or require assistance, please feel free to reply directly to this email.</p><p>Best regards,<br/><strong>Team Judad KSA</strong><br/>Website: judadksa.com</p>`
     },
     support: {
-      subject: 'Re: আপনার প্রশ্নের প্রেক্ষিতে Judad KSA সহায়তা',
-      body: `<p>প্রিয় গ্রাহক,</p><p>আপনার অনুসন্ধানের জন্য ধন্যবাদ। আমাদের সাপোর্ট টিম আপনার বিষয়টি পর্যালোচনা করেছে।</p><p>আপনার সমস্যার সমাধান বা বিস্তারিত তথ্য জানতে অনুগ্রহ করে আমাদের অফিসিয়াল পোর্টাল চেক করুন অথবা এই ইমেইলের প্রত্যুত্তরে আপনার সুবিধাজনক যোগাযোগের সময় জানিয়ে দিন।</p><p>আন্তরিক শুভেচ্ছা সহ,<br/><strong>Judad Support Desk</strong><br/>support@judadksa.com</p>`
+      subject: 'Re: Judad KSA Support Inquiry',
+      body: `<p>Hello,</p><p>Thank you for reaching out to Judad KSA Customer Support. Our team has reviewed your inquiry.</p><p>Please let us know your preferred time for a consultation or check our official portal for further assistance.</p><p>Warm regards,<br/><strong>Judad Support Desk</strong><br/>support@judadksa.com</p>`
     },
     quote: {
       subject: 'Official Quotation & Service Proposal - Judad KSA',
-      body: `<p>Dear Valued Client,</p><p>Thank you for reaching out to Judad KSA. Please find our commercial proposal and service quotation attached as requested.</p><ul><li>Service Scope: Enterprise Solutions</li><li>Domain: judadksa.com</li><li>Validity: 14 business days</li></ul><p>Feel free to let us know if you require any adjustments.</p><p>Best regards,<br/><strong>Management Team</strong><br/>admin@judadksa.com</p>`
+      body: `<p>Dear Valued Client,</p><p>Thank you for contacting Judad KSA. Please find our commercial proposal and service quotation details outlined below:</p><ul><li>Service Scope: Enterprise IT & Mail Solutions</li><li>Domain: judadksa.com</li><li>Validity: 14 business days</li></ul><p>Feel free to let us know if you require any custom adjustments.</p><p>Best regards,<br/><strong>Management Team</strong><br/>admin@judadksa.com</p>`
     }
   };
 
@@ -223,7 +223,7 @@
           </svg>
         </div>
         <div class="account-details">
-          <span class="account-name">সকল ইনবক্স</span>
+          <span class="account-name">All Inboxes</span>
           <span class="account-desc">Unified View</span>
         </div>
         <span class="badge ${state.accounts.reduce((sum, a) => sum + a.unreadInbox, 0) > 0 ? 'unread-badge' : ''}">
@@ -274,11 +274,11 @@
 
   // Update View Header Title
   function updateViewTitle() {
-    let folderName = 'ইনবক্স (Inbox)';
-    if (state.currentFolder === 'sent') folderName = 'সেন্ট বক্স (Sent Box)';
-    if (state.currentFolder === 'trash') folderName = 'ট্র্যাশ (Trash)';
+    let folderName = 'Inbox';
+    if (state.currentFolder === 'sent') folderName = 'Sent';
+    if (state.currentFolder === 'trash') folderName = 'Trash';
 
-    let accountName = 'সকল অ্যাকাউন্ট';
+    let accountName = 'All Accounts';
     if (state.currentAccount !== 'all') {
       accountName = state.currentAccount;
     }
@@ -292,7 +292,7 @@
       elements.emailItemsContainer.innerHTML = `
         <div class="loading-state">
           <div class="spinner"></div>
-          <span>ইমেইল লোড হচ্ছে...</span>
+          <span>Loading emails...</span>
         </div>
       `;
 
@@ -312,12 +312,12 @@
         displayList = displayList.filter(e => !e.read);
       }
 
-      elements.emailCountPill.innerText = `${displayList.length} টি ইমেইল`;
+      elements.emailCountPill.innerText = `${displayList.length} email${displayList.length === 1 ? '' : 's'}`;
 
       if (displayList.length === 0) {
-        let msg = 'এই ফোল্ডারে কোনো ইমেইল পাওয়া যায়নি।';
+        let msg = 'No emails found in this folder.';
         if (state.searchQuery) {
-          msg = `"${state.searchQuery}" এর জন্য কোনো ফলাফল নেই।`;
+          msg = `No results found for "${state.searchQuery}".`;
         }
         elements.emailItemsContainer.innerHTML = `
           <div class="empty-state">
@@ -328,7 +328,7 @@
             <p>${msg}</p>
             ${state.currentFolder === 'inbox' ? `
               <button class="btn btn-sm btn-primary" id="btnEmptySimulate">
-                ইনবক্সে টেস্ট মেইল পাঠিয়ে দেখুন
+                Send a test email to your inbox
               </button>
             ` : ''}
           </div>
@@ -339,7 +339,6 @@
           btnSim.addEventListener('click', openInboundModal);
         }
 
-        // If currently selected email is not in list, show placeholder
         if (!state.emails.find(e => e.id === state.selectedEmailId)) {
           showPlaceholder();
         }
@@ -354,15 +353,12 @@
         const sender = parseEmailAddress(email.from);
         const recipient = parseEmailAddress(Array.isArray(email.to) ? email.to[0] : email.to);
 
-        // Who to display as primary contact
         const contactName = state.currentFolder === 'sent' ? `To: ${recipient.name}` : sender.name;
 
-        // Account badge type
         let accType = 'info';
         if (email.account?.includes('admin')) accType = 'admin';
         if (email.account?.includes('support')) accType = 'support';
 
-        // Extract plain text snippet
         let snippet = email.text || '';
         if (!snippet && email.html) {
           const temp = document.createElement('div');
@@ -384,7 +380,7 @@
                 <span class="email-item-date">${formatDate(email.created_at)}</span>
               </div>
               <div class="email-item-subject">${escapeHtml(email.subject || '(No Subject)')}</div>
-              <div class="email-item-snippet">${escapeHtml(snippet || 'কোনো মেসেজ প্রিভিউ নেই')}</div>
+              <div class="email-item-snippet">${escapeHtml(snippet || 'No message preview available')}</div>
               <div class="email-item-badges">
                 <span class="pill-account ${accType}">${email.account || 'judadksa.com'}</span>
                 <span class="pill-status ${email.status || 'sent'}">${email.status || 'sent'}</span>
@@ -396,7 +392,6 @@
 
       elements.emailItemsContainer.innerHTML = listHtml;
 
-      // Click to select email
       elements.emailItemsContainer.querySelectorAll('.email-item').forEach(item => {
         item.addEventListener('click', () => {
           const id = item.dataset.id;
@@ -404,7 +399,6 @@
         });
       });
 
-      // Auto select first email if none selected
       if (!state.selectedEmailId && displayList.length > 0) {
         selectEmail(displayList[0].id);
       }
@@ -412,7 +406,7 @@
       console.error('Error loading emails:', error);
       elements.emailItemsContainer.innerHTML = `
         <div class="empty-state">
-          <p>ইমেইল লোড করতে সমস্যা হয়েছে</p>
+          <p>Failed to load emails</p>
         </div>
       `;
     }
@@ -422,7 +416,6 @@
   async function selectEmail(id) {
     state.selectedEmailId = id;
 
-    // Highlight item in list
     elements.emailItemsContainer.querySelectorAll('.email-item').forEach(el => {
       if (el.dataset.id === id) {
         el.classList.add('active');
@@ -441,15 +434,12 @@
       const email = data.email;
       state.currentEmailData = email;
 
-      // Update cached state
       const local = state.emails.find(e => e.id === id);
       if (local) {
         local.read = true;
       }
 
-      // Refresh account unread badges
       loadAccounts();
-
       renderEmailDetail(email);
     } catch (err) {
       console.error('Error fetching email details:', err);
@@ -465,12 +455,11 @@
     const sender = parseEmailAddress(email.from);
     const toStr = Array.isArray(email.to) ? email.to.join(', ') : (email.to || '');
 
-    elements.detailSubject.innerText = email.subject || '(কোনো বিষয় উল্লেখ নেই)';
+    elements.detailSubject.innerText = email.subject || '(No Subject)';
     elements.detailAccountBadge.innerText = email.account || 'judadksa.com';
     elements.detailStatusBadge.innerText = (email.status || 'sent').toUpperCase();
     elements.detailFolderBadge.innerText = (email.folder || 'Inbox').toUpperCase();
 
-    // Account color class
     let accType = 'info';
     if (email.account?.includes('admin')) accType = 'admin';
     if (email.account?.includes('support')) accType = 'support';
@@ -483,16 +472,16 @@
     elements.detailDate.innerText = new Date(email.created_at).toLocaleString();
 
     // Body content: prefer HTML, fall back to text
-    if (email.html) {
+    if (email.html && email.html.trim() !== '') {
       elements.detailBody.innerHTML = email.html;
+    } else if (email.text && email.text.trim() !== '') {
+      elements.detailBody.innerHTML = `<p>${escapeHtml(email.text).replace(/\n/g, '<br/>')}</p>`;
     } else {
-      elements.detailBody.innerHTML = `<p>${escapeHtml(email.text || '').replace(/\n/g, '<br/>')}</p>`;
+      elements.detailBody.innerHTML = `<p class="text-muted">(No body content available)</p>`;
     }
 
     elements.detailResendId.innerText = email.resend_id || email.id;
-
-    // Toggle read button label
-    elements.toggleReadLabel.innerText = email.read ? 'অপঠিত করুন' : 'পঠিত করুন';
+    elements.toggleReadLabel.innerText = email.read ? 'Mark Unread' : 'Mark Read';
   }
 
   function showPlaceholder() {
@@ -512,11 +501,10 @@
     const message = elements.composeMessageInput.value;
 
     if (!from || !to || !subject || !message) {
-      showToast('অনুগ্রহ করে সমস্ত প্রয়োজনীয় ঘর পূরণ করুন', 'error');
+      showToast('Please fill in all required fields', 'error');
       return;
     }
 
-    // Set loading state
     const submitBtn = elements.submitSendBtn;
     const btnContent = submitBtn.querySelector('.btn-content');
     const spinner = submitBtn.querySelector('.btn-spinner');
@@ -541,22 +529,20 @@
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'ইমেইল পাঠাতে ব্যর্থ হয়েছে');
+        throw new Error(data.error || 'Failed to send email');
       }
 
-      showToast(`ইমেইল সফলভাবে পাঠানো হয়েছে (${from} থেকে)`, 'success');
+      showToast(`Email sent successfully from ${from}`, 'success');
       closeComposeModal();
 
-      // Reset form
       elements.composeForm.reset();
 
-      // Switch to Sent folder and refresh
       switchFolder('sent');
       loadAccounts();
       loadEmails();
     } catch (err) {
       console.error('Error sending email:', err);
-      showToast(err.message || 'ইমেইল পাঠাতে ত্রুটি হয়েছে', 'error');
+      showToast(err.message || 'Error sending email', 'error');
     } finally {
       btnContent.style.display = 'inline-flex';
       spinner.style.display = 'none';
@@ -586,17 +572,15 @@
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'সিমুলেশন ব্যর্থ হয়েছে');
+      if (!res.ok) throw new Error(data.error || 'Simulation failed');
 
-      showToast(`টেস্ট ইমেইলটি সফলভাবে ${targetAccount} ইনবক্সে এসেছে!`, 'success');
+      showToast(`Test email received into ${targetAccount} inbox!`, 'success');
       closeInboundModal();
 
-      // Switch to inbox
       switchFolder('inbox');
       loadAccounts();
       await loadEmails();
 
-      // Automatically select the new inbound email
       if (data.email?.id) {
         selectEmail(data.email.id);
       }
@@ -608,18 +592,18 @@
   // 6. Sync with Resend
   async function handleSyncResend() {
     elements.syncResendBtn.disabled = true;
-    showToast('Resend থেকে লাইভ ইমেইল সিঙ্ক করা হচ্ছে...', 'info');
+    showToast('Syncing live emails from Resend...', 'info');
 
     try {
       const res = await fetch('/api/emails/sync-resend', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      showToast(data.message || 'সিঙ্ক সম্পন্ন হয়েছে', 'success');
+      showToast(data.message || 'Sync completed successfully', 'success');
       loadAccounts();
       loadEmails();
     } catch (err) {
-      showToast(err.message || 'সিঙ্ক ব্যর্থ হয়েছে', 'error');
+      showToast(err.message || 'Failed to sync with Resend', 'error');
     } finally {
       elements.syncResendBtn.disabled = false;
     }
@@ -630,8 +614,8 @@
     if (!state.selectedEmailId) return;
 
     const confirmMsg = state.currentFolder === 'trash'
-      ? 'আপনি কি নিশ্চিত যে এই ইমেইলটি চিরতরে মুছে ফেলতে চান?'
-      : 'ইমেইলটি ট্র্যাশ ফোল্ডারে পাঠাতে চান?';
+      ? 'Are you sure you want to permanently delete this email?'
+      : 'Move this email to trash?';
 
     if (!confirm(confirmMsg)) return;
 
@@ -640,7 +624,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      showToast(data.action === 'permanently_deleted' ? 'ইমেইল স্থায়ীভাবে মুছে ফেলা হয়েছে' : 'ইমেইল ট্র্যাশে সরানো হয়েছে', 'info');
+      showToast(data.action === 'permanently_deleted' ? 'Email permanently deleted' : 'Email moved to trash', 'info');
       showPlaceholder();
       loadAccounts();
       loadEmails();
@@ -663,12 +647,12 @@
       if (!res.ok) throw new Error();
 
       state.currentEmailData.read = targetStatus;
-      elements.toggleReadLabel.innerText = targetStatus ? 'অপঠিত করুন' : 'পঠিত করুন';
-      showToast(targetStatus ? 'পঠিত হিসেবে চিহ্নিত' : 'অপঠিত হিসেবে চিহ্নিত', 'info');
+      elements.toggleReadLabel.innerText = targetStatus ? 'Mark Unread' : 'Mark Read';
+      showToast(targetStatus ? 'Marked as read' : 'Marked as unread', 'info');
       loadAccounts();
       loadEmails();
     } catch (err) {
-      showToast('স্ট্যাটাস আপডেট ব্যর্থ হয়েছে', 'error');
+      showToast('Failed to update status', 'error');
     }
   }
 
@@ -678,17 +662,14 @@
     const email = state.currentEmailData;
     const sender = parseEmailAddress(email.from);
 
-    // Set recipient as sender
     elements.composeToInput.value = sender.email;
-    // Set Subject as Re:
     elements.composeSubjectInput.value = email.subject.startsWith('Re:') ? email.subject : `Re: ${email.subject}`;
 
-    // Select the From account that this email was received on
     if (email.account && elements.composeFromSelect.querySelector(`option[value="${email.account}"]`)) {
       elements.composeFromSelect.value = email.account;
     }
 
-    elements.composeMessageInput.value = `\n\n--- পূর্ববর্তী বার্তা ---\nপ্রেরক: ${email.from}\nতারিখ: ${email.created_at}\n\n${email.text || ''}`;
+    elements.composeMessageInput.value = `\n\n--- Original Message ---\nFrom: ${email.from}\nDate: ${email.created_at}\n\n${email.text || ''}`;
 
     openComposeModal();
   }
@@ -753,7 +734,6 @@
   }
 
   function openDomainModal() {
-    // Set current domain webhook url in modal
     const origin = window.location.origin;
     elements.webhookUrlCode.innerText = `${origin}/api/webhook`;
     elements.domainModal.style.display = 'flex';
@@ -763,24 +743,21 @@
     elements.domainModal.style.display = 'none';
   }
 
-  // Copy webhook URL helper
   function copyWebhookUrl() {
     const text = elements.webhookUrlCode.innerText;
     navigator.clipboard.writeText(text).then(() => {
-      showToast('Webhook URL ক্লিপবোর্ডে কপি হয়েছে!', 'success');
+      showToast('Webhook URL copied to clipboard!', 'success');
     }).catch(() => {
-      showToast('কপি করা সম্ভব হয়নি', 'error');
+      showToast('Failed to copy URL', 'error');
     });
   }
 
   // Setup Event Listeners
   function setupEvents() {
-    // Folder Navigation
     elements.folderInboxBtn.addEventListener('click', () => switchFolder('inbox'));
     elements.folderSentBtn.addEventListener('click', () => switchFolder('sent'));
     elements.folderTrashBtn.addEventListener('click', () => switchFolder('trash'));
 
-    // Filter Buttons (All vs Unread)
     elements.filterAllBtn.addEventListener('click', () => {
       state.currentFilter = 'all';
       elements.filterAllBtn.classList.add('active');
@@ -795,7 +772,6 @@
       loadEmails();
     });
 
-    // Search Input with Debounce
     let searchTimeout = null;
     elements.searchInput.addEventListener('input', (e) => {
       clearTimeout(searchTimeout);
@@ -815,7 +791,6 @@
       loadEmails();
     });
 
-    // Header buttons
     elements.openComposeBtn.addEventListener('click', () => openComposeModal());
     elements.emptyComposeTrigger.addEventListener('click', () => openComposeModal());
     elements.simulateInboundBtn.addEventListener('click', openInboundModal);
@@ -823,7 +798,6 @@
     elements.domainInfoBtn.addEventListener('click', openDomainModal);
     elements.domainStatusPill.addEventListener('click', openDomainModal);
 
-    // Modal Close
     elements.closeComposeBtn.addEventListener('click', closeComposeModal);
     elements.cancelComposeBtn.addEventListener('click', closeComposeModal);
 
@@ -835,14 +809,12 @@
 
     elements.copyWebhookBtn.addEventListener('click', copyWebhookUrl);
 
-    // Close on overlay backdrop click
     [elements.composeModal, elements.inboundModal, elements.domainModal].forEach(modal => {
       modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.style.display = 'none';
       });
     });
 
-    // Quick Templates
     document.querySelectorAll('.btn-template').forEach(btn => {
       btn.addEventListener('click', () => {
         const tplKey = btn.dataset.tpl;
@@ -854,25 +826,20 @@
       });
     });
 
-    // Forms
     elements.composeForm.addEventListener('submit', handleSendEmail);
     elements.inboundSimForm.addEventListener('submit', handleInboundSimulate);
 
-    // Reader action buttons
     elements.replyBtn.addEventListener('click', handleReply);
     elements.forwardBtn.addEventListener('click', handleForward);
     elements.deleteEmailBtn.addEventListener('click', handleDeleteEmail);
     elements.toggleReadBtn.addEventListener('click', handleToggleRead);
 
-    // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-      // Escape closes modals
       if (e.key === 'Escape') {
         elements.composeModal.style.display = 'none';
         elements.inboundModal.style.display = 'none';
         elements.domainModal.style.display = 'none';
       }
-      // 'c' opens compose when not typing in an input
       if (e.key === 'c' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
         openComposeModal();
       }
@@ -887,7 +854,6 @@
     await loadEmails();
   }
 
-  // Run on DOM ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
