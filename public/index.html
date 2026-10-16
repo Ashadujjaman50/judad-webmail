@@ -102,7 +102,11 @@
                 <span class="account-name">All Inboxes</span>
                 <span class="account-desc">Unified View</span>
               </div>
-              <span class="badge" id="badgeAllInbox">0</span>
+              <span class="count-badge" id="badgeAllInbox" title="Unread / Total">
+                <span class="badge-unread">0</span>
+                <span class="badge-sep">/</span>
+                <span class="badge-total">0</span>
+              </span>
             </button>
           </div>
         </div>
@@ -119,7 +123,11 @@
                 </svg>
                 <span>Inbox</span>
               </div>
-              <span class="badge unread-badge" id="currentFolderInboxBadge">0</span>
+              <span class="count-badge" id="currentFolderInboxBadge" title="Unread / Total in Inbox">
+                <span class="badge-unread">0</span>
+                <span class="badge-sep">/</span>
+                <span class="badge-total">0</span>
+              </span>
             </button>
 
             <button class="folder-item" data-folder="sent" id="folderSentBtn">
@@ -130,7 +138,11 @@
                 </svg>
                 <span>Sent</span>
               </div>
-              <span class="badge" id="currentFolderSentBadge">0</span>
+              <span class="count-badge" id="currentFolderSentBadge" title="Unread / Total in Sent">
+                <span class="badge-unread">0</span>
+                <span class="badge-sep">/</span>
+                <span class="badge-total">0</span>
+              </span>
             </button>
 
             <button class="folder-item" data-folder="trash" id="folderTrashBtn">
@@ -141,7 +153,11 @@
                 </svg>
                 <span>Trash</span>
               </div>
-              <span class="badge" id="currentFolderTrashBadge">0</span>
+              <span class="count-badge" id="currentFolderTrashBadge" title="Unread / Total in Trash">
+                <span class="badge-unread">0</span>
+                <span class="badge-sep">/</span>
+                <span class="badge-total">0</span>
+              </span>
             </button>
           </nav>
         </div>
@@ -183,6 +199,12 @@
           <div class="filter-tabs">
             <button class="filter-btn active" data-filter="all" id="filterAllBtn">All</button>
             <button class="filter-btn" data-filter="unread" id="filterUnreadBtn">Unread</button>
+            <button class="filter-btn mark-all-btn" id="markAllReadBtn" title="Mark all emails in this folder as read">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <span>Read all</span>
+            </button>
           </div>
         </div>
 

@@ -3,8 +3,8 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
-const fs = require('fs');
 const { Resend } = require('resend');
+const db = require('./db');
 
 const app = express();
 const router = express.Router();
@@ -23,62 +23,6 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Detect Serverless (Netlify / AWS Lambda) environment
-const isServerless = !!(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
-const DB_FILE = isServerless
-  ? path.join('/tmp', 'emails.json')
-  : path.join(__dirname, 'data', 'emails.json');
-
-// Ensure DB exists and is sanitized
-function readDb() {
-  try {
-    if (!fs.existsSync(DB_FILE)) {
-      const initialData = { emails: [] };
-      writeDb(initialData);
-      return initialData;
-    }
-    const content = fs.readFileSync(DB_FILE, 'utf-8');
-    const data = JSON.parse(content);
-
-    // Strictly enforce judadksa.com domain isolation
-    if (Array.isArray(data.emails)) {
-      const filtered = data.emails.filter(e => {
-        const accLower = (e.account || '').toLowerCase();
-        const fromLower = (e.from || '').toLowerCase();
-        const toLower = Array.isArray(e.to) ? e.to.join(' ').toLowerCase() : (e.to || '').toLowerCase();
-
-        return accLower.includes(`@${DOMAIN.toLowerCase()}`) ||
-               fromLower.includes(`@${DOMAIN.toLowerCase()}`) ||
-               toLower.includes(`@${DOMAIN.toLowerCase()}`);
-      });
-
-      if (filtered.length !== data.emails.length) {
-        data.emails = filtered;
-        writeDb(data);
-      }
-    }
-
-    return data;
-  } catch (err) {
-    console.error('Error reading DB:', err);
-    return { emails: [] };
-  }
-}
-
-function writeDb(data) {
-  try {
-    const dir = path.dirname(DB_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    return true;
-  } catch (err) {
-    console.error('Error writing DB:', err);
-    return false;
-  }
-}
 
 // Helper: Normalize and match account from email address (STRICT for judadksa.com)
 function matchAccount(addressString) {
@@ -100,7 +44,7 @@ function matchAccount(addressString) {
 
 // Helper: Sync Inbound Emails from Resend Receiving API
 let lastInboundSync = 0;
-async function syncInboundFromResend(db, force = false) {
+async function syncInboundFromResend(force = false) {
   const now = Date.now();
   if (!force && now - lastInboundSync < 6000) {
     return 0;
@@ -120,7 +64,7 @@ async function syncInboundFromResend(db, force = false) {
       const belongs = fromLower.includes(`@${DOMAIN.toLowerCase()}`) || toLower.includes(`@${DOMAIN.toLowerCase()}`);
       if (!belongs) continue;
 
-      let existing = db.emails.find(e => e.id === item.id || e.resend_id === item.id);
+      let existing = db.getEmailById(item.id);
 
       // If new OR if content is missing, fetch full content
       if (!existing || !existing.html || !existing.text) {
@@ -139,7 +83,9 @@ async function syncInboundFromResend(db, force = false) {
         const matchedAcc = matchAccount(toLower) || matchAccount(fromLower) || CONNECTED_ACCOUNTS[0];
 
         if (!existing) {
-          existing = {
+          // Check if previously recorded as read
+          const wasRead = db.getReadStatus(item.id);
+          const emailToSave = {
             id: item.id,
             resend_id: item.id,
             folder: 'inbox',
@@ -150,19 +96,19 @@ async function syncInboundFromResend(db, force = false) {
             html: emailHtml || `<p>${emailText || ''}</p>`,
             text: emailText || '',
             status: 'delivered',
-            read: false,
+            read: wasRead === true ? true : false,
             created_at: item.created_at || new Date().toISOString()
           };
-          db.emails.unshift(existing);
+          db.upsertEmail(emailToSave);
           imported++;
         } else {
           existing.html = emailHtml || existing.html;
           existing.text = emailText || existing.text;
+          db.upsertEmail(existing);
         }
       }
     }
 
-    writeDb(db);
     return imported;
   } catch (err) {
     console.error('Inbound sync error:', err);
@@ -172,7 +118,7 @@ async function syncInboundFromResend(db, force = false) {
 
 // Helper: Sync Outbound Emails from Resend Emails API
 let lastOutboundSync = 0;
-async function syncOutboundFromResend(db, force = false) {
+async function syncOutboundFromResend(force = false) {
   const now = Date.now();
   if (!force && now - lastOutboundSync < 6000) {
     return 0;
@@ -191,11 +137,12 @@ async function syncOutboundFromResend(db, force = false) {
       const belongs = fromLower.includes(`@${DOMAIN.toLowerCase()}`) || toLower.includes(`@${DOMAIN.toLowerCase()}`);
       if (!belongs) continue;
 
-      let existing = db.emails.find(e => e.id === item.id || e.resend_id === item.id);
+      let existing = db.getEmailById(item.id);
       const matchedAcc = matchAccount(item.from) || matchAccount(toLower) || CONNECTED_ACCOUNTS[0];
 
       if (!existing) {
-        existing = {
+        const wasRead = db.getReadStatus(item.id);
+        const emailToSave = {
           id: item.id,
           resend_id: item.id,
           folder: 'sent',
@@ -206,19 +153,19 @@ async function syncOutboundFromResend(db, force = false) {
           html: null,
           text: null,
           status: item.last_event || 'sent',
-          read: true,
+          read: wasRead !== null ? wasRead : true,
           created_at: item.created_at || new Date().toISOString()
         };
-        db.emails.unshift(existing);
+        db.upsertEmail(emailToSave);
         imported++;
       } else {
         if (item.last_event && existing.status !== item.last_event) {
           existing.status = item.last_event;
+          db.upsertEmail(existing);
         }
       }
     }
 
-    writeDb(db);
     return imported;
   } catch (err) {
     console.error('Outbound sync error:', err);
@@ -228,20 +175,23 @@ async function syncOutboundFromResend(db, force = false) {
 
 // 1. Get Accounts and Stats
 router.get('/accounts', async (req, res) => {
-  const db = readDb();
-
   // Keep counts updated from Resend
-  await syncInboundFromResend(db);
+  await syncInboundFromResend();
+
+  const allEmails = db.getAllEmails();
 
   const accountsData = CONNECTED_ACCOUNTS.map(email => {
-    const unreadInbox = db.emails.filter(
-      e => e.folder === 'inbox' && e.account === email && !e.read
+    const unreadInbox = allEmails.filter(
+      e => e.folder === 'inbox' && (e.account || '').toLowerCase() === email.toLowerCase() && !e.read
     ).length;
-    const totalInbox = db.emails.filter(
-      e => e.folder === 'inbox' && e.account === email
+    const totalInbox = allEmails.filter(
+      e => e.folder === 'inbox' && (e.account || '').toLowerCase() === email.toLowerCase()
     ).length;
-    const totalSent = db.emails.filter(
-      e => e.folder === 'sent' && e.account === email
+    const totalSent = allEmails.filter(
+      e => e.folder === 'sent' && (e.account || '').toLowerCase() === email.toLowerCase()
+    ).length;
+    const unreadSent = allEmails.filter(
+      e => e.folder === 'sent' && (e.account || '').toLowerCase() === email.toLowerCase() && !e.read
     ).length;
 
     let role = 'General Info';
@@ -253,23 +203,31 @@ router.get('/accounts', async (req, res) => {
       role,
       unreadInbox,
       totalInbox,
-      totalSent
+      totalSent,
+      unreadSent
     };
   });
 
-  const allUnread = db.emails.filter(e => e.folder === 'inbox' && !e.read).length;
-  const allInbox = db.emails.filter(e => e.folder === 'inbox').length;
-  const allSent = db.emails.filter(e => e.folder === 'sent').length;
-  const allTrash = db.emails.filter(e => e.folder === 'trash').length;
+  const allUnreadInbox = allEmails.filter(e => e.folder === 'inbox' && !e.read).length;
+  const allInbox = allEmails.filter(e => e.folder === 'inbox').length;
+  const allSent = allEmails.filter(e => e.folder === 'sent').length;
+  const allUnreadSent = allEmails.filter(e => e.folder === 'sent' && !e.read).length;
+  const allTrash = allEmails.filter(e => e.folder === 'trash').length;
+  const allUnreadTrash = allEmails.filter(e => e.folder === 'trash' && !e.read).length;
 
   res.json({
     accounts: accountsData,
     domain: DOMAIN,
     totals: {
-      unreadInbox: allUnread,
+      unreadInbox: allUnreadInbox,
       inbox: allInbox,
+      totalInbox: allInbox,
+      unreadSent: allUnreadSent,
       sent: allSent,
-      trash: allTrash
+      totalSent: allSent,
+      unreadTrash: allUnreadTrash,
+      trash: allTrash,
+      totalTrash: allTrash
     }
   });
 });
@@ -313,18 +271,17 @@ router.get('/domain-status', async (req, res) => {
 // 3. Get Emails (Inbox, Sent, Trash) with filters
 router.get('/emails', async (req, res) => {
   const { folder = 'inbox', account = 'all', search = '' } = req.query;
-  const db = readDb();
 
   if (folder === 'inbox') {
-    await syncInboundFromResend(db);
+    await syncInboundFromResend();
   } else if (folder === 'sent') {
-    await syncOutboundFromResend(db);
+    await syncOutboundFromResend();
   }
 
-  let list = db.emails.filter(e => e.folder === folder);
+  let list = db.getAllEmails().filter(e => e.folder === folder);
 
   if (account && account !== 'all') {
-    list = list.filter(e => e.account.toLowerCase() === account.toLowerCase());
+    list = list.filter(e => (e.account || '').toLowerCase() === account.toLowerCase());
   }
 
   if (search && search.trim() !== '') {
@@ -341,10 +298,13 @@ router.get('/emails', async (req, res) => {
   // Sort newest first
   list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+  const unreadCount = list.filter(e => !e.read).length;
+
   res.json({
     folder,
     account,
     count: list.length,
+    unreadCount,
     emails: list
   });
 });
@@ -352,8 +312,7 @@ router.get('/emails', async (req, res) => {
 // 4. Get Single Email with full content fetching
 router.get('/emails/:id', async (req, res) => {
   const { id } = req.params;
-  const db = readDb();
-  let email = db.emails.find(e => e.id === id || e.resend_id === id);
+  let email = db.getEmailById(id);
 
   // If not found in local db, try to fetch directly from Resend Receiving
   if (!email) {
@@ -375,8 +334,8 @@ router.get('/emails/:id', async (req, res) => {
           read: true,
           created_at: rec.data.created_at || new Date().toISOString()
         };
-        db.emails.unshift(email);
-        writeDb(db);
+        db.upsertEmail(email);
+        db.setReadStatus(email.id, true);
       }
     } catch (e) {
       // Check Sent API
@@ -397,8 +356,8 @@ router.get('/emails/:id', async (req, res) => {
             read: true,
             created_at: sent.data.created_at || new Date().toISOString()
           };
-          db.emails.unshift(email);
-          writeDb(db);
+          db.upsertEmail(email);
+          db.setReadStatus(email.id, true);
         }
       } catch (err) {}
     }
@@ -417,7 +376,7 @@ router.get('/emails/:id', async (req, res) => {
         if (liveRec?.data) {
           email.html = liveRec.data.html || email.html;
           email.text = liveRec.data.text || email.text;
-          writeDb(db);
+          db.upsertEmail(email);
         }
       } catch (e) {}
     } else if (email.folder === 'sent') {
@@ -427,15 +386,17 @@ router.get('/emails/:id', async (req, res) => {
           email.html = liveSent.data.html || email.html;
           email.text = liveSent.data.text || email.text;
           email.status = liveSent.data.last_event || email.status;
-          writeDb(db);
+          db.upsertEmail(email);
         }
       } catch (e) {}
     }
   }
 
+  // Automatically mark as read when user opens the email
   if (!email.read) {
     email.read = true;
-    writeDb(db);
+    db.setReadStatus(email.id, true);
+    db.upsertEmail(email);
   }
 
   res.json({ email });
@@ -487,7 +448,6 @@ router.post('/emails/send', async (req, res) => {
 
     const resendId = result.data?.id;
 
-    const db = readDb();
     const newSentEmail = {
       id: resendId || `sent-${Date.now()}`,
       resend_id: resendId,
@@ -503,8 +463,8 @@ router.post('/emails/send', async (req, res) => {
       created_at: new Date().toISOString()
     };
 
-    db.emails.unshift(newSentEmail);
-    writeDb(db);
+    db.upsertEmail(newSentEmail);
+    db.setReadStatus(newSentEmail.id, true);
 
     res.json({
       success: true,
@@ -522,7 +482,6 @@ router.post('/emails/send', async (req, res) => {
 router.post('/webhook', async (req, res) => {
   try {
     const payload = req.body;
-    const db = readDb();
 
     // Event 1: Inbound Email (email.received or email.inbound)
     if (payload?.type === 'email.inbound' || payload?.type === 'email.received' || payload?.email) {
@@ -551,14 +510,16 @@ router.post('/webhook', async (req, res) => {
         }
       }
 
-      // Check if already in db
-      const existing = db.emails.find(e => (emailId && (e.id === emailId || e.resend_id === emailId)));
+      // Check existing email
+      const existing = db.getEmailById(emailId);
       if (existing) {
         existing.html = emailHtml || existing.html;
         existing.text = emailText || existing.text;
-        writeDb(db);
+        db.upsertEmail(existing);
         return res.json({ success: true, action: 'inbound_updated', id: existing.id });
       }
+
+      const wasRead = db.getReadStatus(emailId);
 
       const inboundEmail = {
         id: emailId || `inbound-${Date.now()}`,
@@ -571,22 +532,21 @@ router.post('/webhook', async (req, res) => {
         html: emailHtml || `<p>${emailText || ''}</p>`,
         text: emailText || '',
         status: 'delivered',
-        read: false,
+        read: wasRead === true ? true : false,
         created_at: emailData.created_at || new Date().toISOString()
       };
 
-      db.emails.unshift(inboundEmail);
-      writeDb(db);
+      db.upsertEmail(inboundEmail);
       return res.json({ success: true, action: 'inbound_saved', id: inboundEmail.id });
     }
 
     // Event 2: Status update for sent email
     if (payload?.type && payload.data?.email_id) {
       const emailId = payload.data.email_id;
-      const found = db.emails.find(e => e.resend_id === emailId || e.id === emailId);
+      const found = db.getEmailById(emailId);
       if (found) {
         found.status = payload.type.replace('email.', '');
-        writeDb(db);
+        db.upsertEmail(found);
         return res.json({ success: true, action: 'status_updated', status: found.status });
       }
     }
@@ -602,10 +562,11 @@ router.post('/webhook', async (req, res) => {
 router.post('/emails/simulate-inbound', (req, res) => {
   const { account, from, subject, message } = req.body;
   const targetAccount = CONNECTED_ACCOUNTS.includes(account) ? account : CONNECTED_ACCOUNTS[0];
+  const simId = `sim-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
-  const db = readDb();
   const simulated = {
-    id: `sim-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    id: simId,
+    resend_id: simId,
     folder: 'inbox',
     account: targetAccount,
     from: from || 'Client Partner <partner@company.com>',
@@ -627,8 +588,8 @@ router.post('/emails/simulate-inbound', (req, res) => {
     created_at: new Date().toISOString()
   };
 
-  db.emails.unshift(simulated);
-  writeDb(db);
+  db.upsertEmail(simulated);
+  db.setReadStatus(simId, false);
 
   res.json({
     success: true,
@@ -640,9 +601,8 @@ router.post('/emails/simulate-inbound', (req, res) => {
 // 8. Sync sent AND received emails from Resend (STRICTLY for judadksa.com ONLY)
 router.post('/emails/sync-resend', async (req, res) => {
   try {
-    const db = readDb();
-    const inboundCount = await syncInboundFromResend(db, true);
-    const outboundCount = await syncOutboundFromResend(db, true);
+    const inboundCount = await syncInboundFromResend(true);
+    const outboundCount = await syncOutboundFromResend(true);
 
     res.json({
       success: true,
@@ -657,41 +617,61 @@ router.post('/emails/sync-resend', async (req, res) => {
   }
 });
 
-// 9. Mark read / unread
+// 9. Mark single email read / unread
 router.patch('/emails/:id/read', (req, res) => {
   const { id } = req.params;
   const { read } = req.body;
-  const db = readDb();
-  const email = db.emails.find(e => e.id === id);
+  const isRead = typeof read === 'boolean' ? read : true;
+
+  db.setReadStatus(id, isRead);
+
+  const email = db.getEmailById(id);
+  if (!email) {
+    return res.json({ success: true, id, read: isRead });
+  }
+
+  email.read = isRead;
+  db.upsertEmail(email);
+
+  res.json({ success: true, email });
+});
+
+// 10. Client LocalStorage Read State Synchronization
+router.post('/emails/sync-read-states', (req, res) => {
+  const { readIds = [], unreadIds = [] } = req.body;
+  db.batchSetReadStatus(readIds, unreadIds);
+  res.json({
+    success: true,
+    message: `Synced ${readIds.length} read and ${unreadIds.length} unread states`
+  });
+});
+
+// 11. Mark all emails in a folder / account as read
+router.post('/emails/mark-all-read', (req, res) => {
+  const { folder = 'inbox', account = 'all' } = req.body;
+  const count = db.markAllRead(folder, account);
+  res.json({
+    success: true,
+    message: `Marked ${count} emails as read in ${folder}`,
+    count
+  });
+});
+
+// 12. Delete / Move to Trash
+router.delete('/emails/:id', (req, res) => {
+  const { id } = req.params;
+  const email = db.getEmailById(id);
 
   if (!email) {
     return res.status(404).json({ error: 'Email not found' });
   }
 
-  email.read = typeof read === 'boolean' ? read : true;
-  writeDb(db);
-
-  res.json({ success: true, email });
-});
-
-// 10. Delete / Move to Trash
-router.delete('/emails/:id', (req, res) => {
-  const { id } = req.params;
-  const db = readDb();
-  const index = db.emails.findIndex(e => e.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ error: 'Email not found' });
-  }
-
-  const email = db.emails[index];
   if (email.folder === 'trash') {
-    db.emails.splice(index, 1);
-    writeDb(db);
+    db.deleteEmailPermanently(id);
     return res.json({ success: true, action: 'permanently_deleted' });
   } else {
+    db.updateEmailFolder(id, 'trash');
     email.folder = 'trash';
-    writeDb(db);
     return res.json({ success: true, action: 'moved_to_trash', email });
   }
 });
@@ -717,6 +697,7 @@ if (require.main === module) {
     console.log(`📧 Connected Accounts:`);
     CONNECTED_ACCOUNTS.forEach(acc => console.log(`   - ${acc}`));
     console.log(`🌐 Domain: ${DOMAIN}`);
+    console.log(`💾 Database: ${db.useSqlite ? 'SQLite (node:sqlite)' : 'JSON file fallback'}`);
     console.log(`🔗 Webhook URL: http://localhost:${PORT}/api/webhook`);
     console.log(`===============================================`);
   });

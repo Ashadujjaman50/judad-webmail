@@ -6,6 +6,93 @@
 (function () {
   'use strict';
 
+  // LocalStorage Keys for Indestructible Read/Unread State Persistence
+  const STORAGE_READ_KEY = 'judad_read_emails_v1';
+  const STORAGE_UNREAD_KEY = 'judad_unread_emails_v1';
+
+  function getStoredReadIds() {
+    try {
+      const raw = localStorage.getItem(STORAGE_READ_KEY);
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  function saveStoredReadIds(set) {
+    try {
+      localStorage.setItem(STORAGE_READ_KEY, JSON.stringify(Array.from(set)));
+    } catch (e) {}
+  }
+
+  function getStoredUnreadIds() {
+    try {
+      const raw = localStorage.getItem(STORAGE_UNREAD_KEY);
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  function saveStoredUnreadIds(set) {
+    try {
+      localStorage.setItem(STORAGE_UNREAD_KEY, JSON.stringify(Array.from(set)));
+    } catch (e) {}
+  }
+
+  function markEmailAsReadInStorage(id) {
+    if (!id) return;
+    const readSet = getStoredReadIds();
+    const unreadSet = getStoredUnreadIds();
+    readSet.add(id);
+    unreadSet.delete(id);
+    saveStoredReadIds(readSet);
+    saveStoredUnreadIds(unreadSet);
+  }
+
+  function markEmailAsUnreadInStorage(id) {
+    if (!id) return;
+    const readSet = getStoredReadIds();
+    const unreadSet = getStoredUnreadIds();
+    readSet.delete(id);
+    unreadSet.add(id);
+    saveStoredReadIds(readSet);
+    saveStoredUnreadIds(unreadSet);
+  }
+
+  async function syncClientReadStatesWithServer() {
+    const readSet = getStoredReadIds();
+    const unreadSet = getStoredUnreadIds();
+    if (readSet.size === 0 && unreadSet.size === 0) return;
+
+    try {
+      await fetch('/api/emails/sync-read-states', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          readIds: Array.from(readSet),
+          unreadIds: Array.from(unreadSet)
+        })
+      });
+    } catch (e) {}
+  }
+
+  // Format new unread / Total count badge
+  function formatBadgeHtml(unread, total) {
+    return `
+      <span class="badge-unread">${unread}</span>
+      <span class="badge-sep">/</span>
+      <span class="badge-total">${total}</span>
+    `;
+  }
+
+  function updateBadgeElement(el, unread, total, titlePrefix = '') {
+    if (!el) return;
+    el.innerHTML = formatBadgeHtml(unread, total);
+    el.className = `count-badge ${unread > 0 ? 'has-unread' : ''}`;
+    el.title = `${titlePrefix ? titlePrefix + ': ' : ''}${unread} new unread / ${total} total`;
+  }
+
   // State Management
   const state = {
     currentAccount: 'all', // 'all' or specific email address
@@ -44,6 +131,7 @@
     emailCountPill: document.getElementById('emailCountPill'),
     filterAllBtn: document.getElementById('filterAllBtn'),
     filterUnreadBtn: document.getElementById('filterUnreadBtn'),
+    markAllReadBtn: document.getElementById('markAllReadBtn'),
     emailItemsContainer: document.getElementById('emailItemsContainer'),
 
     // Email Detail Column
@@ -176,32 +264,26 @@
     return { name: addressStr.split('@')[0], email: addressStr };
   }
 
-  // 1. Fetch & Render Accounts in Sidebar
+  // 1. Fetch & Render Accounts in Sidebar with unread / total count
   async function loadAccounts() {
     try {
       const res = await fetch('/api/accounts');
       const data = await res.json();
       state.accounts = data.accounts || [];
 
-      // Update total badge counters
-      if (elements.badgeAllInbox) {
-        elements.badgeAllInbox.innerText = data.totals?.unreadInbox || 0;
-        if (data.totals?.unreadInbox > 0) {
-          elements.badgeAllInbox.classList.add('unread-badge');
-        } else {
-          elements.badgeAllInbox.classList.remove('unread-badge');
-        }
-      }
+      const totals = data.totals || {};
+      const unreadInbox = totals.unreadInbox ?? 0;
+      const totalInbox = totals.totalInbox ?? totals.inbox ?? 0;
+      const unreadSent = totals.unreadSent ?? 0;
+      const totalSent = totals.totalSent ?? totals.sent ?? 0;
+      const unreadTrash = totals.unreadTrash ?? 0;
+      const totalTrash = totals.totalTrash ?? totals.trash ?? 0;
 
-      if (elements.currentFolderInboxBadge) {
-        elements.currentFolderInboxBadge.innerText = data.totals?.unreadInbox || 0;
-      }
-      if (elements.currentFolderSentBadge) {
-        elements.currentFolderSentBadge.innerText = data.totals?.sent || 0;
-      }
-      if (elements.currentFolderTrashBadge) {
-        elements.currentFolderTrashBadge.innerText = data.totals?.trash || 0;
-      }
+      // Update folder badges to show new unread / Total count
+      updateBadgeElement(elements.badgeAllInbox, unreadInbox, totalInbox, 'All Inboxes');
+      updateBadgeElement(elements.currentFolderInboxBadge, unreadInbox, totalInbox, 'Inbox');
+      updateBadgeElement(elements.currentFolderSentBadge, unreadSent, totalSent, 'Sent');
+      updateBadgeElement(elements.currentFolderTrashBadge, unreadTrash, totalTrash, 'Trash');
 
       renderAccountList();
     } catch (error) {
@@ -209,9 +291,12 @@
     }
   }
 
-  // Render Account Sidebar Buttons
+  // Render Account Sidebar Buttons with unread / total count
   function renderAccountList() {
     if (!elements.accountList) return;
+
+    const totalAllUnread = state.accounts.reduce((sum, a) => sum + (a.unreadInbox || 0), 0);
+    const totalAllInbox = state.accounts.reduce((sum, a) => sum + (a.totalInbox || 0), 0);
 
     let html = `
       <button class="account-item ${state.currentAccount === 'all' ? 'active' : ''}" data-account="all">
@@ -226,8 +311,8 @@
           <span class="account-name">All Inboxes</span>
           <span class="account-desc">Unified View</span>
         </div>
-        <span class="badge ${state.accounts.reduce((sum, a) => sum + a.unreadInbox, 0) > 0 ? 'unread-badge' : ''}">
-          ${state.accounts.reduce((sum, a) => sum + a.unreadInbox, 0)}
+        <span class="count-badge ${totalAllUnread > 0 ? 'has-unread' : ''}" id="badgeAllInbox" title="All Inboxes: ${totalAllUnread} new unread / ${totalAllInbox} total">
+          ${formatBadgeHtml(totalAllUnread, totalAllInbox)}
         </span>
       </button>
     `;
@@ -243,6 +328,9 @@
         iconLetter = 'S';
       }
 
+      const unread = acc.unreadInbox || 0;
+      const total = acc.totalInbox || 0;
+
       html += `
         <button class="account-item ${state.currentAccount === acc.email ? 'active' : ''}" data-account="${acc.email}">
           <div class="account-icon ${iconClass}">${iconLetter}</div>
@@ -250,7 +338,9 @@
             <span class="account-name">${acc.email}</span>
             <span class="account-desc">${acc.role}</span>
           </div>
-          <span class="badge ${acc.unreadInbox > 0 ? 'unread-badge' : ''}">${acc.unreadInbox}</span>
+          <span class="count-badge ${unread > 0 ? 'has-unread' : ''}" title="${acc.email}: ${unread} new unread / ${total} total">
+            ${formatBadgeHtml(unread, total)}
+          </span>
         </button>
       `;
     });
@@ -306,19 +396,46 @@
       const data = await res.json();
       state.emails = data.emails || [];
 
+      // Reconcile with client persistent storage (Ensures emails NEVER flip back to unread on reload or sync)
+      const readSet = getStoredReadIds();
+      const unreadSet = getStoredUnreadIds();
+
+      state.emails.forEach(email => {
+        if (readSet.has(email.id) || (email.resend_id && readSet.has(email.resend_id))) {
+          email.read = true;
+        } else if (unreadSet.has(email.id) || (email.resend_id && unreadSet.has(email.resend_id))) {
+          email.read = false;
+        }
+      });
+
       // Filter by unread if active
       let displayList = state.emails;
       if (state.currentFilter === 'unread') {
         displayList = displayList.filter(e => !e.read);
       }
 
-      elements.emailCountPill.innerText = `${displayList.length} email${displayList.length === 1 ? '' : 's'}`;
+      // Update header email count pill
+      const unreadInList = state.emails.filter(e => !e.read).length;
+      const totalInList = state.emails.length;
+
+      if (state.currentFilter === 'unread') {
+        elements.emailCountPill.innerHTML = `<span class="pill-unread-num">${displayList.length} unread</span>`;
+      } else {
+        elements.emailCountPill.innerHTML = `
+          <span class="pill-unread-num">${unreadInList} unread</span>
+          <span style="opacity:0.4; margin: 0 4px;">/</span>
+          <span>${totalInList} total</span>
+        `;
+      }
 
       if (displayList.length === 0) {
         let msg = 'No emails found in this folder.';
         if (state.searchQuery) {
           msg = `No results found for "${state.searchQuery}".`;
+        } else if (state.currentFilter === 'unread') {
+          msg = 'No unread emails in this folder.';
         }
+
         elements.emailItemsContainer.innerHTML = `
           <div class="empty-state">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -326,7 +443,7 @@
               <line x1="8" y1="12" x2="16" y2="12"></line>
             </svg>
             <p>${msg}</p>
-            ${state.currentFolder === 'inbox' ? `
+            ${state.currentFolder === 'inbox' && state.currentFilter === 'all' ? `
               <button class="btn btn-sm btn-primary" id="btnEmptySimulate">
                 Send a test email to your inbox
               </button>
@@ -416,6 +533,9 @@
   async function selectEmail(id) {
     state.selectedEmailId = id;
 
+    // Immediately persist read status locally
+    markEmailAsReadInStorage(id);
+
     elements.emailItemsContainer.querySelectorAll('.email-item').forEach(el => {
       if (el.dataset.id === id) {
         el.classList.add('active');
@@ -427,20 +547,22 @@
       }
     });
 
+    const local = state.emails.find(e => e.id === id || e.resend_id === id);
+    const wasUnread = local && !local.read;
+    if (local) {
+      local.read = true;
+    }
+
     try {
       const res = await fetch(`/api/emails/${id}`);
       if (!res.ok) throw new Error('Email not found');
       const data = await res.json();
       const email = data.email;
+      email.read = true; // Guarantee true
       state.currentEmailData = email;
 
-      const local = state.emails.find(e => e.id === id);
-      if (local) {
-        local.read = true;
-      }
-
-      loadAccounts();
       renderEmailDetail(email);
+      loadAccounts();
     } catch (err) {
       console.error('Error fetching email details:', err);
       showPlaceholder();
@@ -578,7 +700,7 @@
       closeInboundModal();
 
       switchFolder('inbox');
-      loadAccounts();
+      await loadAccounts();
       await loadEmails();
 
       if (data.email?.id) {
@@ -589,19 +711,22 @@
     }
   }
 
-  // 6. Sync with Resend
+  // 6. Sync with Resend (Syncs read IDs first, ensuring read state is preserved!)
   async function handleSyncResend() {
     elements.syncResendBtn.disabled = true;
     showToast('Syncing live emails from Resend...', 'info');
 
     try {
+      // First ensure the server is primed with our stored read states
+      await syncClientReadStatesWithServer();
+
       const res = await fetch('/api/emails/sync-resend', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
       showToast(data.message || 'Sync completed successfully', 'success');
-      loadAccounts();
-      loadEmails();
+      await loadAccounts();
+      await loadEmails();
     } catch (err) {
       showToast(err.message || 'Failed to sync with Resend', 'error');
     } finally {
@@ -636,27 +761,95 @@
   // 8. Toggle Read/Unread
   async function handleToggleRead() {
     if (!state.currentEmailData) return;
+    const id = state.currentEmailData.id;
     const targetStatus = !state.currentEmailData.read;
 
+    // Persist to localStorage
+    if (targetStatus) {
+      markEmailAsReadInStorage(id);
+      if (state.currentEmailData.resend_id) markEmailAsReadInStorage(state.currentEmailData.resend_id);
+    } else {
+      markEmailAsUnreadInStorage(id);
+      if (state.currentEmailData.resend_id) markEmailAsUnreadInStorage(state.currentEmailData.resend_id);
+    }
+
+    state.currentEmailData.read = targetStatus;
+    const local = state.emails.find(e => e.id === id || e.resend_id === id);
+    if (local) {
+      local.read = targetStatus;
+    }
+
+    elements.toggleReadLabel.innerText = targetStatus ? 'Mark Unread' : 'Mark Read';
+    showToast(targetStatus ? 'Marked as read' : 'Marked as unread', 'info');
+
+    // Update list UI
+    elements.emailItemsContainer.querySelectorAll('.email-item').forEach(el => {
+      if (el.dataset.id === id) {
+        if (targetStatus) {
+          el.classList.remove('unread');
+          const indicator = el.querySelector('.unread-indicator');
+          if (indicator) indicator.remove();
+        } else {
+          el.classList.add('unread');
+          if (!el.querySelector('.unread-indicator')) {
+            const ind = document.createElement('div');
+            ind.className = 'unread-indicator';
+            el.prepend(ind);
+          }
+        }
+      }
+    });
+
     try {
-      const res = await fetch(`/api/emails/${state.currentEmailData.id}/read`, {
+      await fetch(`/api/emails/${id}/read`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ read: targetStatus })
       });
-      if (!res.ok) throw new Error();
+    } catch (e) {}
 
-      state.currentEmailData.read = targetStatus;
-      elements.toggleReadLabel.innerText = targetStatus ? 'Mark Unread' : 'Mark Read';
-      showToast(targetStatus ? 'Marked as read' : 'Marked as unread', 'info');
-      loadAccounts();
+    await loadAccounts();
+    if (state.currentFilter === 'unread') {
       loadEmails();
-    } catch (err) {
-      showToast('Failed to update status', 'error');
     }
   }
 
-  // 9. Reply Handler
+  // 9. Mark All Emails in Folder as Read
+  async function handleMarkAllRead() {
+    try {
+      const readSet = getStoredReadIds();
+      const unreadSet = getStoredUnreadIds();
+
+      state.emails.forEach(e => {
+        e.read = true;
+        readSet.add(e.id);
+        if (e.resend_id) readSet.add(e.resend_id);
+        unreadSet.delete(e.id);
+        if (e.resend_id) unreadSet.delete(e.resend_id);
+      });
+
+      saveStoredReadIds(readSet);
+      saveStoredUnreadIds(unreadSet);
+
+      await fetch('/api/emails/mark-all-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folder: state.currentFolder,
+          account: state.currentAccount
+        })
+      });
+
+      showToast('All emails marked as read', 'success');
+      await loadAccounts();
+      await loadEmails();
+    } catch (err) {
+      console.error('Error marking all as read:', err);
+      showToast('Failed to mark all as read', 'error');
+    }
+  }
+
+  // 10. Reply Handler
   function handleReply() {
     if (!state.currentEmailData) return;
     const email = state.currentEmailData;
@@ -674,7 +867,7 @@
     openComposeModal();
   }
 
-  // 10. Forward Handler
+  // 11. Forward Handler
   function handleForward() {
     if (!state.currentEmailData) return;
     const email = state.currentEmailData;
@@ -772,6 +965,10 @@
       loadEmails();
     });
 
+    if (elements.markAllReadBtn) {
+      elements.markAllReadBtn.addEventListener('click', handleMarkAllRead);
+    }
+
     let searchTimeout = null;
     elements.searchInput.addEventListener('input', (e) => {
       clearTimeout(searchTimeout);
@@ -850,6 +1047,8 @@
   async function init() {
     setupEvents();
     updateViewTitle();
+    // Synchronize local read IDs to server to ensure zero state regression
+    await syncClientReadStatesWithServer();
     await loadAccounts();
     await loadEmails();
   }
