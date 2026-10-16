@@ -22,6 +22,23 @@ if (!fs.existsSync(DATA_DIR)) {
 let sqliteDb = null;
 let useSqlite = false;
 
+// Known demo/test IDs to permanently exclude in live production
+const DEMO_EMAIL_IDS = new Set([
+  'b86ba276-22a5-494e-9c80-be22c692ce55'
+]);
+
+function isDemoEmail(id, subject = '', text = '') {
+  if (!id) return false;
+  if (DEMO_EMAIL_IDS.has(id)) return true;
+  if (id.startsWith('sim-') || id.startsWith('test-')) return true;
+  const subj = (subject || '').toLowerCase().trim();
+  const txt = (text || '').toLowerCase().trim();
+  if (subj === 'test mail' && txt.includes('hello bangladesh')) {
+    return true;
+  }
+  return false;
+}
+
 // Attempt to initialize SQLite (Node 22.5+ node:sqlite DatabaseSync)
 try {
   const { DatabaseSync } = require('node:sqlite');
@@ -51,9 +68,17 @@ try {
     CREATE INDEX IF NOT EXISTS idx_emails_folder ON emails(folder);
     CREATE INDEX IF NOT EXISTS idx_emails_account ON emails(account);
     CREATE INDEX IF NOT EXISTS idx_emails_read ON emails(read);
+    CREATE INDEX IF NOT EXISTS idx_emails_status ON emails(status);
     CREATE INDEX IF NOT EXISTS idx_emails_created_at ON emails(created_at);
   `);
   useSqlite = true;
+
+  // Purge any demo/test emails from SQLite database
+  try {
+    sqliteDb.prepare("DELETE FROM emails WHERE id = 'b86ba276-22a5-494e-9c80-be22c692ce55' OR id LIKE 'sim-%' OR id LIKE 'test-%'").run();
+    sqliteDb.prepare("DELETE FROM read_status WHERE id = 'b86ba276-22a5-494e-9c80-be22c692ce55' OR id LIKE 'sim-%' OR id LIKE 'test-%'").run();
+  } catch (e) {}
+
   console.log(`[Database] SQLite initialized successfully at: ${SQLITE_FILE}`);
 } catch (err) {
   useSqlite = false;
@@ -64,7 +89,12 @@ try {
 function loadReadStatusMap() {
   try {
     if (fs.existsSync(READ_STATUS_FILE)) {
-      return JSON.parse(fs.readFileSync(READ_STATUS_FILE, 'utf-8'));
+      const map = JSON.parse(fs.readFileSync(READ_STATUS_FILE, 'utf-8'));
+      // Clean demo IDs from map
+      for (const id of Object.keys(map)) {
+        if (isDemoEmail(id)) delete map[id];
+      }
+      return map;
     }
   } catch (e) {}
   return {};
@@ -80,7 +110,9 @@ function loadJsonEmails() {
   try {
     if (fs.existsSync(JSON_FILE)) {
       const data = JSON.parse(fs.readFileSync(JSON_FILE, 'utf-8'));
-      return Array.isArray(data.emails) ? data.emails : [];
+      if (Array.isArray(data.emails)) {
+        return data.emails.filter(e => !isDemoEmail(e.id, e.subject, e.text));
+      }
     }
   } catch (e) {}
   return [];
@@ -88,7 +120,8 @@ function loadJsonEmails() {
 
 function saveJsonEmails(emails) {
   try {
-    fs.writeFileSync(JSON_FILE, JSON.stringify({ emails }, null, 2), 'utf-8');
+    const cleanList = emails.filter(e => !isDemoEmail(e.id, e.subject, e.text));
+    fs.writeFileSync(JSON_FILE, JSON.stringify({ emails: cleanList }, null, 2), 'utf-8');
   } catch (e) {}
 }
 
@@ -137,10 +170,9 @@ function emailToRow(email) {
 
 /**
  * Get read status for an email ID
- * Returns boolean (true/false) or null if unknown
  */
 function getReadStatus(id) {
-  if (!id) return null;
+  if (!id || isDemoEmail(id)) return null;
 
   if (useSqlite) {
     try {
@@ -162,7 +194,7 @@ function getReadStatus(id) {
  * Set read status for an email ID
  */
 function setReadStatus(id, isRead) {
-  if (!id) return;
+  if (!id || isDemoEmail(id)) return;
   const numVal = isRead ? 1 : 0;
   const now = new Date().toISOString();
 
@@ -182,7 +214,6 @@ function setReadStatus(id, isRead) {
     }
   }
 
-  // Also update JSON map and JSON emails
   const map = loadReadStatusMap();
   map[id] = !!isRead;
   saveReadStatusMap(map);
@@ -201,7 +232,7 @@ function setReadStatus(id, isRead) {
 }
 
 /**
- * Batch set read status (called when client syncs its localStorage read states)
+ * Batch set read status
  */
 function batchSetReadStatus(readIds = [], unreadIds = []) {
   const now = new Date().toISOString();
@@ -218,13 +249,13 @@ function batchSetReadStatus(readIds = [], unreadIds = []) {
       `);
 
       for (const id of readIds) {
-        if (!id) continue;
+        if (!id || isDemoEmail(id)) continue;
         upsert.run(id, 1, now);
         updateEmail.run(1, id, id);
       }
 
       for (const id of unreadIds) {
-        if (!id) continue;
+        if (!id || isDemoEmail(id)) continue;
         upsert.run(id, 0, now);
         updateEmail.run(0, id, id);
       }
@@ -234,17 +265,17 @@ function batchSetReadStatus(readIds = [], unreadIds = []) {
   }
 
   const map = loadReadStatusMap();
-  for (const id of readIds) if (id) map[id] = true;
-  for (const id of unreadIds) if (id) map[id] = false;
+  for (const id of readIds) if (id && !isDemoEmail(id)) map[id] = true;
+  for (const id of unreadIds) if (id && !isDemoEmail(id)) map[id] = false;
   saveReadStatusMap(map);
 
   const jsonEmails = loadJsonEmails();
   let modified = false;
   for (const e of jsonEmails) {
-    if (readIds.includes(e.id) || readIds.includes(e.resend_id)) {
+    if (readIds.includes(e.id) || (e.resend_id && readIds.includes(e.resend_id))) {
       e.read = true;
       modified = true;
-    } else if (unreadIds.includes(e.id) || unreadIds.includes(e.resend_id)) {
+    } else if (unreadIds.includes(e.id) || (e.resend_id && unreadIds.includes(e.resend_id))) {
       e.read = false;
       modified = true;
     }
@@ -255,13 +286,13 @@ function batchSetReadStatus(readIds = [], unreadIds = []) {
 }
 
 /**
- * Get all emails
+ * Get all clean emails (strictly excludes demo emails)
  */
 function getAllEmails() {
   if (useSqlite) {
     try {
       const rows = sqliteDb.prepare('SELECT * FROM emails ORDER BY created_at DESC').all();
-      return rows.map(rowToEmail);
+      return rows.map(rowToEmail).filter(e => !isDemoEmail(e.id, e.subject, e.text));
     } catch (e) {
       console.error('Error getting all emails from SQLite:', e);
     }
@@ -274,29 +305,31 @@ function getAllEmails() {
  * Get email by ID or Resend ID
  */
 function getEmailById(id) {
-  if (!id) return null;
+  if (!id || isDemoEmail(id)) return null;
 
   if (useSqlite) {
     try {
-      const row = sqliteDb.prepare('SELECT * FROM emails WHERE id = ? OR resend_id = ? LIMIT 1').get(id, id);
-      if (row) return rowToEmail(row);
+      const row = sqliteDb.prepare('SELECT * FROM emails WHERE (id = ? OR resend_id = ?) LIMIT 1').get(id, id);
+      if (row && !isDemoEmail(row.id, row.subject, row.text)) {
+        return rowToEmail(row);
+      }
     } catch (e) {
       console.error('Error getting email by ID from SQLite:', e);
     }
   }
 
   const list = loadJsonEmails();
-  return list.find(e => e.id === id || e.resend_id === id) || null;
+  return list.find(e => (e.id === id || e.resend_id === id) && !isDemoEmail(e.id, e.subject, e.text)) || null;
 }
 
 /**
- * Upsert email
- * Crucial: Preserves existing read status if already recorded!
+ * Upsert email (Strictly blocks demo emails, preserves read status)
  */
 function upsertEmail(emailData) {
-  if (!emailData || !emailData.id) return null;
+  if (!emailData || !emailData.id || isDemoEmail(emailData.id, emailData.subject, emailData.text)) {
+    return null;
+  }
 
-  // Determine read status: check existing email or read_status registry
   const existingRead = getReadStatus(emailData.id) ?? getReadStatus(emailData.resend_id);
   let finalRead = false;
   if (existingRead !== null) {
@@ -334,7 +367,6 @@ function upsertEmail(emailData) {
     }
   }
 
-  // Also sync with JSON
   const jsonEmails = loadJsonEmails();
   const idx = jsonEmails.findIndex(e => e.id === normalized.id || (e.resend_id && e.resend_id === normalized.resend_id));
   if (idx >= 0) {
@@ -354,7 +386,7 @@ function upsertEmail(emailData) {
 }
 
 /**
- * Update email folder (e.g. move to trash)
+ * Update email folder (e.g. move to trash or outbox)
  */
 function updateEmailFolder(id, folder) {
   if (!id) return false;
@@ -372,6 +404,37 @@ function updateEmailFolder(id, folder) {
   for (const e of jsonEmails) {
     if (e.id === id || e.resend_id === id) {
       e.folder = folder;
+      modified = true;
+    }
+  }
+  if (modified) saveJsonEmails(jsonEmails);
+  return true;
+}
+
+/**
+ * Update email status (e.g. sent, bounced, failed)
+ */
+function updateEmailStatus(id, status, folder = null) {
+  if (!id) return false;
+
+  if (useSqlite) {
+    try {
+      if (folder) {
+        sqliteDb.prepare('UPDATE emails SET status = ?, folder = ? WHERE id = ? OR resend_id = ?').run(status, folder, id, id);
+      } else {
+        sqliteDb.prepare('UPDATE emails SET status = ? WHERE id = ? OR resend_id = ?').run(status, id, id);
+      }
+    } catch (e) {
+      console.error('Error updating email status in SQLite:', e);
+    }
+  }
+
+  const jsonEmails = loadJsonEmails();
+  let modified = false;
+  for (const e of jsonEmails) {
+    if (e.id === id || e.resend_id === id) {
+      e.status = status;
+      if (folder) e.folder = folder;
       modified = true;
     }
   }
@@ -424,27 +487,13 @@ function markAllRead(folder = 'inbox', account = 'all') {
   return readIds.length;
 }
 
-// Initial sync from existing JSON to SQLite if SQLite is empty
-if (useSqlite) {
-  try {
-    const countRow = sqliteDb.prepare('SELECT COUNT(*) as cnt FROM emails').get();
-    if (countRow && countRow.cnt === 0) {
-      const initialEmails = loadJsonEmails();
-      if (initialEmails.length > 0) {
-        console.log(`[Database] Seeding ${initialEmails.length} emails from JSON to SQLite...`);
-        for (const email of initialEmails) {
-          upsertEmail(email);
-        }
-      }
-    }
-  } catch (e) {
-    console.error('[Database] Seeding error:', e);
-  }
-}
+// Initial cleanup of JSON on startup
+saveJsonEmails(loadJsonEmails());
 
 module.exports = {
   isServerless,
   useSqlite,
+  isDemoEmail,
   getReadStatus,
   setReadStatus,
   batchSetReadStatus,
@@ -452,6 +501,7 @@ module.exports = {
   getEmailById,
   upsertEmail,
   updateEmailFolder,
+  updateEmailStatus,
   deleteEmailPermanently,
   markAllRead
 };

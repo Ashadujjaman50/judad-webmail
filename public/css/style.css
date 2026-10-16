@@ -540,6 +540,29 @@ button, input, select, textarea {
   opacity: 0.85;
 }
 
+/* Outbox warning state when bounced or failed emails exist */
+.count-badge.has-outbox {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.4);
+  box-shadow: 0 1px 6px rgba(239, 68, 68, 0.2);
+}
+
+.count-badge.has-outbox .badge-unread {
+  color: #f87171;
+  font-weight: 700;
+  text-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+}
+
+.count-badge.has-outbox .badge-sep {
+  opacity: 0.6;
+  color: #fca5a5;
+}
+
+.count-badge.has-outbox .badge-total {
+  color: #fca5a5;
+  opacity: 0.85;
+}
+
 /* Highlight badge inside active folder or active account */
 .folder-item.active .count-badge,
 .account-item.active .count-badge {
@@ -552,6 +575,13 @@ button, input, select, textarea {
   background: var(--primary);
   border-color: var(--primary);
   box-shadow: 0 2px 8px var(--primary-glow);
+}
+
+.folder-item.active .count-badge.has-outbox,
+.account-item.active .count-badge.has-outbox {
+  background: #dc2626;
+  border-color: #dc2626;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.5);
 }
 
 .folder-item.active .count-badge.has-unread .badge-unread,
@@ -924,8 +954,68 @@ button, input, select, textarea {
   color: var(--success);
 }
 .pill-status.bounced {
-  background: var(--danger-bg);
-  color: var(--danger);
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+.pill-status.failed {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+.pill-status.delivery_delayed {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Outbox Alert Card for Bounced & Failed Delivery */
+.outbox-alert-card {
+  margin: 14px 24px 0;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(245, 158, 11, 0.08) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.08);
+}
+
+.alert-icon-wrap {
+  color: #f87171;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.alert-text-wrap {
+  flex: 1;
+}
+
+.alert-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fca5a5;
+  margin-bottom: 2px;
+}
+
+.alert-heading span {
+  text-transform: uppercase;
+  color: #ef4444;
+}
+
+.alert-desc {
+  font-size: 11.5px;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.alert-actions-wrap {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* Empty State / Loading State */

@@ -42,7 +42,7 @@ function matchAccount(addressString) {
   return null;
 }
 
-// Helper: Sync Inbound Emails from Resend Receiving API
+// Helper: Sync Inbound Emails from Resend Receiving API (Excludes Demo Emails)
 let lastInboundSync = 0;
 async function syncInboundFromResend(force = false) {
   const now = Date.now();
@@ -57,6 +57,9 @@ async function syncInboundFromResend(force = false) {
     let imported = 0;
 
     for (const item of liveEmails) {
+      // Exclude demo/test emails
+      if (db.isDemoEmail(item.id, item.subject)) continue;
+
       const fromLower = (item.from || '').toLowerCase();
       const toLower = Array.isArray(item.to) ? item.to.join(' ').toLowerCase() : (item.to || '').toLowerCase();
 
@@ -83,7 +86,6 @@ async function syncInboundFromResend(force = false) {
         const matchedAcc = matchAccount(toLower) || matchAccount(fromLower) || CONNECTED_ACCOUNTS[0];
 
         if (!existing) {
-          // Check if previously recorded as read
           const wasRead = db.getReadStatus(item.id);
           const emailToSave = {
             id: item.id,
@@ -131,6 +133,8 @@ async function syncOutboundFromResend(force = false) {
     let imported = 0;
 
     for (const item of liveEmails) {
+      if (db.isDemoEmail(item.id, item.subject)) continue;
+
       const fromLower = (item.from || '').toLowerCase();
       const toLower = Array.isArray(item.to) ? item.to.join(' ').toLowerCase() : (item.to || '').toLowerCase();
 
@@ -140,19 +144,22 @@ async function syncOutboundFromResend(force = false) {
       let existing = db.getEmailById(item.id);
       const matchedAcc = matchAccount(item.from) || matchAccount(toLower) || CONNECTED_ACCOUNTS[0];
 
+      const status = item.last_event || 'sent';
+      const isOutboxStatus = status === 'bounced' || status === 'failed' || status === 'delivery_delayed';
+
       if (!existing) {
         const wasRead = db.getReadStatus(item.id);
         const emailToSave = {
           id: item.id,
           resend_id: item.id,
-          folder: 'sent',
+          folder: isOutboxStatus ? 'outbox' : 'sent',
           account: matchedAcc,
           from: item.from,
           to: item.to,
           subject: item.subject || '(No Subject)',
           html: null,
           text: null,
-          status: item.last_event || 'sent',
+          status: status,
           read: wasRead !== null ? wasRead : true,
           created_at: item.created_at || new Date().toISOString()
         };
@@ -161,6 +168,9 @@ async function syncOutboundFromResend(force = false) {
       } else {
         if (item.last_event && existing.status !== item.last_event) {
           existing.status = item.last_event;
+          if (isOutboxStatus && existing.folder !== 'trash') {
+            existing.folder = 'outbox';
+          }
           db.upsertEmail(existing);
         }
       }
@@ -173,7 +183,7 @@ async function syncOutboundFromResend(force = false) {
   }
 }
 
-// 1. Get Accounts and Stats
+// 1. Get Accounts and Stats (Including Outbox with Bounced/Failed)
 router.get('/accounts', async (req, res) => {
   // Keep counts updated from Resend
   await syncInboundFromResend();
@@ -187,11 +197,21 @@ router.get('/accounts', async (req, res) => {
     const totalInbox = allEmails.filter(
       e => e.folder === 'inbox' && (e.account || '').toLowerCase() === email.toLowerCase()
     ).length;
+
     const totalSent = allEmails.filter(
-      e => e.folder === 'sent' && (e.account || '').toLowerCase() === email.toLowerCase()
+      e => e.folder === 'sent' && (e.account || '').toLowerCase() === email.toLowerCase() && e.status !== 'bounced' && e.status !== 'failed'
     ).length;
     const unreadSent = allEmails.filter(
-      e => e.folder === 'sent' && (e.account || '').toLowerCase() === email.toLowerCase() && !e.read
+      e => e.folder === 'sent' && (e.account || '').toLowerCase() === email.toLowerCase() && !e.read && e.status !== 'bounced' && e.status !== 'failed'
+    ).length;
+
+    const totalOutbox = allEmails.filter(
+      e => (e.account || '').toLowerCase() === email.toLowerCase() && e.folder !== 'trash' &&
+           (e.folder === 'outbox' || e.status === 'bounced' || e.status === 'failed' || e.status === 'delivery_delayed')
+    ).length;
+    const unreadOutbox = allEmails.filter(
+      e => (e.account || '').toLowerCase() === email.toLowerCase() && !e.read && e.folder !== 'trash' &&
+           (e.folder === 'outbox' || e.status === 'bounced' || e.status === 'failed' || e.status === 'delivery_delayed')
     ).length;
 
     let role = 'General Info';
@@ -204,14 +224,25 @@ router.get('/accounts', async (req, res) => {
       unreadInbox,
       totalInbox,
       totalSent,
-      unreadSent
+      unreadSent,
+      totalOutbox,
+      unreadOutbox
     };
   });
 
   const allUnreadInbox = allEmails.filter(e => e.folder === 'inbox' && !e.read).length;
   const allInbox = allEmails.filter(e => e.folder === 'inbox').length;
-  const allSent = allEmails.filter(e => e.folder === 'sent').length;
-  const allUnreadSent = allEmails.filter(e => e.folder === 'sent' && !e.read).length;
+
+  const allSent = allEmails.filter(e => e.folder === 'sent' && e.status !== 'bounced' && e.status !== 'failed').length;
+  const allUnreadSent = allEmails.filter(e => e.folder === 'sent' && !e.read && e.status !== 'bounced' && e.status !== 'failed').length;
+
+  const allOutbox = allEmails.filter(e =>
+    e.folder !== 'trash' && (e.folder === 'outbox' || e.status === 'bounced' || e.status === 'failed' || e.status === 'delivery_delayed')
+  ).length;
+  const allUnreadOutbox = allEmails.filter(e =>
+    !e.read && e.folder !== 'trash' && (e.folder === 'outbox' || e.status === 'bounced' || e.status === 'failed' || e.status === 'delivery_delayed')
+  ).length;
+
   const allTrash = allEmails.filter(e => e.folder === 'trash').length;
   const allUnreadTrash = allEmails.filter(e => e.folder === 'trash' && !e.read).length;
 
@@ -225,6 +256,9 @@ router.get('/accounts', async (req, res) => {
       unreadSent: allUnreadSent,
       sent: allSent,
       totalSent: allSent,
+      unreadOutbox: allUnreadOutbox,
+      outbox: allOutbox,
+      totalOutbox: allOutbox,
       unreadTrash: allUnreadTrash,
       trash: allTrash,
       totalTrash: allTrash
@@ -268,17 +302,35 @@ router.get('/domain-status', async (req, res) => {
   }
 });
 
-// 3. Get Emails (Inbox, Sent, Trash) with filters
+// 3. Get Emails (Inbox, Sent, Outbox, Trash) with filters
 router.get('/emails', async (req, res) => {
   const { folder = 'inbox', account = 'all', search = '' } = req.query;
 
   if (folder === 'inbox') {
     await syncInboundFromResend();
-  } else if (folder === 'sent') {
+  } else if (folder === 'sent' || folder === 'outbox') {
     await syncOutboundFromResend();
   }
 
-  let list = db.getAllEmails().filter(e => e.folder === folder);
+  let all = db.getAllEmails();
+  let list = [];
+
+  if (folder === 'outbox') {
+    // Outbox: Bounced, Failed, or Queued emails
+    list = all.filter(e =>
+      e.folder !== 'trash' && (e.folder === 'outbox' || e.status === 'bounced' || e.status === 'failed' || e.status === 'delivery_delayed')
+    );
+  } else if (folder === 'sent') {
+    // Sent: Clean sent/delivered emails (excluding bounced/failed)
+    list = all.filter(e =>
+      e.folder === 'sent' && e.status !== 'bounced' && e.status !== 'failed'
+    );
+  } else if (folder === 'trash') {
+    list = all.filter(e => e.folder === 'trash');
+  } else {
+    // inbox
+    list = all.filter(e => e.folder === 'inbox');
+  }
 
   if (account && account !== 'all') {
     list = list.filter(e => (e.account || '').toLowerCase() === account.toLowerCase());
@@ -318,7 +370,7 @@ router.get('/emails/:id', async (req, res) => {
   if (!email) {
     try {
       const rec = await resend.emails.receiving.get(id);
-      if (rec?.data) {
+      if (rec?.data && !db.isDemoEmail(rec.data.id, rec.data.subject)) {
         const toLower = Array.isArray(rec.data.to) ? rec.data.to.join(' ').toLowerCase() : (rec.data.to || '').toLowerCase();
         email = {
           id: rec.data.id,
@@ -341,18 +393,20 @@ router.get('/emails/:id', async (req, res) => {
       // Check Sent API
       try {
         const sent = await resend.emails.get(id);
-        if (sent?.data) {
+        if (sent?.data && !db.isDemoEmail(sent.data.id, sent.data.subject)) {
+          const status = sent.data.last_event || 'sent';
+          const isOutbox = status === 'bounced' || status === 'failed';
           email = {
             id: sent.data.id,
             resend_id: sent.data.id,
-            folder: 'sent',
+            folder: isOutbox ? 'outbox' : 'sent',
             account: matchAccount(sent.data.from) || CONNECTED_ACCOUNTS[0],
             from: sent.data.from,
             to: sent.data.to,
             subject: sent.data.subject || '(No Subject)',
             html: sent.data.html,
             text: sent.data.text,
-            status: sent.data.last_event || 'sent',
+            status: status,
             read: true,
             created_at: sent.data.created_at || new Date().toISOString()
           };
@@ -368,7 +422,7 @@ router.get('/emails/:id', async (req, res) => {
   }
 
   // Ensure content is populated if missing
-  const resendId = email.resend_id || (email.id.startsWith('inbound-') || email.id.startsWith('sim-') ? null : email.id);
+  const resendId = email.resend_id || (email.id.startsWith('inbound-') || email.id.startsWith('sent-') ? null : email.id);
   if (resendId && (!email.html || !email.text || email.text.trim() === '')) {
     if (email.folder === 'inbox') {
       try {
@@ -379,7 +433,7 @@ router.get('/emails/:id', async (req, res) => {
           db.upsertEmail(email);
         }
       } catch (e) {}
-    } else if (email.folder === 'sent') {
+    } else if (email.folder === 'sent' || email.folder === 'outbox') {
       try {
         const liveSent = await resend.emails.get(resendId);
         if (liveSent?.data) {
@@ -402,7 +456,7 @@ router.get('/emails/:id', async (req, res) => {
   res.json({ email });
 });
 
-// 5. Send Email via Resend
+// 5. Send Email via Resend (Preserves failed attempts in Outbox for safe retry)
 router.post('/emails/send', async (req, res) => {
   try {
     const { from, to, subject, html, text, replyTo } = req.body;
@@ -443,7 +497,29 @@ router.post('/emails/send', async (req, res) => {
 
     if (result.error) {
       console.error('Resend error:', result.error);
-      return res.status(400).json({ error: result.error.message || 'Resend API error' });
+
+      // Save to Outbox as Failed so user does NOT lose work and can retry
+      const failedEmail = {
+        id: `failed-${Date.now()}`,
+        resend_id: null,
+        folder: 'outbox',
+        account: senderEmail,
+        from: formattedFrom,
+        to: payload.to,
+        subject,
+        html: payload.html,
+        text: payload.text,
+        status: 'failed',
+        read: false,
+        created_at: new Date().toISOString()
+      };
+      db.upsertEmail(failedEmail);
+
+      return res.status(400).json({
+        error: result.error.message || 'Resend API error',
+        email: failedEmail,
+        savedToOutbox: true
+      });
     }
 
     const resendId = result.data?.id;
@@ -478,7 +554,66 @@ router.post('/emails/send', async (req, res) => {
   }
 });
 
-// 6. Webhook Endpoint for Resend (Inbound and Event delivery updates)
+// 6. Resend Email (For Bounced or Failed emails in Outbox)
+router.post('/emails/:id/resend', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const email = db.getEmailById(id);
+
+    if (!email) {
+      return res.status(404).json({ error: 'Email not found to resend' });
+    }
+
+    const senderEmail = matchAccount(email.from) || CONNECTED_ACCOUNTS[0];
+    let formattedFrom = email.from;
+    if (!formattedFrom || !formattedFrom.includes('<')) {
+      let displayName = 'Judad KSA';
+      if (senderEmail.startsWith('admin')) displayName = 'Judad Admin';
+      else if (senderEmail.startsWith('support')) displayName = 'Judad Support';
+      else displayName = 'Judad Info';
+      formattedFrom = `"${displayName}" <${senderEmail}>`;
+    }
+
+    const payload = {
+      from: formattedFrom,
+      to: Array.isArray(email.to) ? email.to : [email.to],
+      subject: email.subject,
+      html: email.html || `<p>${(email.text || '').replace(/\n/g, '<br/>')}</p>`,
+      text: email.text || ''
+    };
+
+    const result = await resend.emails.send(payload);
+
+    if (result.error) {
+      email.status = 'failed';
+      email.folder = 'outbox';
+      db.upsertEmail(email);
+      return res.status(400).json({
+        error: result.error.message || 'Resend delivery failed',
+        email
+      });
+    }
+
+    // Success: Move from Outbox to Sent
+    email.resend_id = result.data?.id || email.resend_id;
+    email.folder = 'sent';
+    email.status = 'sent';
+    email.created_at = new Date().toISOString();
+    db.upsertEmail(email);
+
+    res.json({
+      success: true,
+      message: 'Email resent successfully and moved to Sent!',
+      email,
+      resendResponse: result.data
+    });
+  } catch (error) {
+    console.error('Error resending email:', error);
+    res.status(500).json({ error: error.message || 'Failed to resend email' });
+  }
+});
+
+// 7. Webhook Endpoint for Resend (Inbound and Event delivery updates including Bounced/Failed)
 router.post('/webhook', async (req, res) => {
   try {
     const payload = req.body;
@@ -487,6 +622,11 @@ router.post('/webhook', async (req, res) => {
     if (payload?.type === 'email.inbound' || payload?.type === 'email.received' || payload?.email) {
       const emailData = payload.data || payload;
       const emailId = emailData.email_id || emailData.id;
+
+      if (db.isDemoEmail(emailId, emailData.subject)) {
+        return res.json({ ignored: true, reason: 'Demo email blocked' });
+      }
+
       const recipient = Array.isArray(emailData.to) ? emailData.to[0] : (emailData.to || '');
       const matchedAcc = matchAccount(recipient);
 
@@ -497,7 +637,6 @@ router.post('/webhook', async (req, res) => {
       let emailHtml = emailData.html || '';
       let emailText = emailData.text || '';
 
-      // Fetch actual message body from Resend Receiving API
       if (emailId) {
         try {
           const fullEmail = await resend.emails.receiving.get(emailId);
@@ -510,7 +649,6 @@ router.post('/webhook', async (req, res) => {
         }
       }
 
-      // Check existing email
       const existing = db.getEmailById(emailId);
       if (existing) {
         existing.html = emailHtml || existing.html;
@@ -540,14 +678,18 @@ router.post('/webhook', async (req, res) => {
       return res.json({ success: true, action: 'inbound_saved', id: inboundEmail.id });
     }
 
-    // Event 2: Status update for sent email
+    // Event 2: Status update for sent email (e.g. email.bounced, email.delivered, email.failed)
     if (payload?.type && payload.data?.email_id) {
       const emailId = payload.data.email_id;
       const found = db.getEmailById(emailId);
       if (found) {
-        found.status = payload.type.replace('email.', '');
+        const eventType = payload.type.replace('email.', '');
+        found.status = eventType;
+        if (eventType === 'bounced' || eventType === 'failed') {
+          found.folder = 'outbox';
+        }
         db.upsertEmail(found);
-        return res.json({ success: true, action: 'status_updated', status: found.status });
+        return res.json({ success: true, action: 'status_updated', status: found.status, folder: found.folder });
       }
     }
 
@@ -558,46 +700,6 @@ router.post('/webhook', async (req, res) => {
   }
 });
 
-// 7. Simulate Inbound Email
-router.post('/emails/simulate-inbound', (req, res) => {
-  const { account, from, subject, message } = req.body;
-  const targetAccount = CONNECTED_ACCOUNTS.includes(account) ? account : CONNECTED_ACCOUNTS[0];
-  const simId = `sim-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-
-  const simulated = {
-    id: simId,
-    resend_id: simId,
-    folder: 'inbox',
-    account: targetAccount,
-    from: from || 'Client Partner <partner@company.com>',
-    to: [targetAccount],
-    subject: subject || 'New Inquiry regarding Judad Services',
-    html: `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1e293b; padding: 16px; background: #ffffff;">
-        <h3 style="color: #0f172a; margin-top: 0;">Hello ${targetAccount},</h3>
-        <p>${(message || 'This is a test inbound email received by the system.').replace(/\n/g, '<br/>')}</p>
-        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-        <p style="font-size: 12px; color: #64748b;">
-          Sent to: <strong>${targetAccount}</strong> • Judad Mail System
-        </p>
-      </div>
-    `,
-    text: message || 'This is a test inbound email received by the system.',
-    status: 'delivered',
-    read: false,
-    created_at: new Date().toISOString()
-  };
-
-  db.upsertEmail(simulated);
-  db.setReadStatus(simId, false);
-
-  res.json({
-    success: true,
-    message: `Test email successfully received into ${targetAccount} inbox!`,
-    email: simulated
-  });
-});
-
 // 8. Sync sent AND received emails from Resend (STRICTLY for judadksa.com ONLY)
 router.post('/emails/sync-resend', async (req, res) => {
   try {
@@ -606,7 +708,7 @@ router.post('/emails/sync-resend', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Successfully synced ${inboundCount} inbox and ${outboundCount} sent emails with content from Resend`,
+      message: `Successfully synced ${inboundCount} inbox and ${outboundCount} sent emails from Resend`,
       domain: DOMAIN,
       inboundCount,
       outboundCount

@@ -96,7 +96,7 @@
   // State Management
   const state = {
     currentAccount: 'all', // 'all' or specific email address
-    currentFolder: 'inbox', // 'inbox' | 'sent' | 'trash'
+    currentFolder: 'inbox', // 'inbox' | 'sent' | 'outbox' | 'trash'
     currentFilter: 'all',   // 'all' | 'unread'
     searchQuery: '',
     selectedEmailId: null,
@@ -111,7 +111,6 @@
     searchInput: document.getElementById('searchInput'),
     clearSearchBtn: document.getElementById('clearSearchBtn'),
     syncResendBtn: document.getElementById('syncResendBtn'),
-    simulateInboundBtn: document.getElementById('simulateInboundBtn'),
     domainInfoBtn: document.getElementById('domainInfoBtn'),
     openComposeBtn: document.getElementById('openComposeBtn'),
     domainStatusPill: document.getElementById('domainStatusPill'),
@@ -121,9 +120,11 @@
     badgeAllInbox: document.getElementById('badgeAllInbox'),
     folderInboxBtn: document.getElementById('folderInboxBtn'),
     folderSentBtn: document.getElementById('folderSentBtn'),
+    folderOutboxBtn: document.getElementById('folderOutboxBtn'),
     folderTrashBtn: document.getElementById('folderTrashBtn'),
     currentFolderInboxBadge: document.getElementById('currentFolderInboxBadge'),
     currentFolderSentBadge: document.getElementById('currentFolderSentBadge'),
+    currentFolderOutboxBadge: document.getElementById('currentFolderOutboxBadge'),
     currentFolderTrashBadge: document.getElementById('currentFolderTrashBadge'),
 
     // Message List Column
@@ -138,6 +139,11 @@
     noSelectionPlaceholder: document.getElementById('noSelectionPlaceholder'),
     activeEmailView: document.getElementById('activeEmailView'),
     emptyComposeTrigger: document.getElementById('emptyComposeTrigger'),
+    outboxAlertCard: document.getElementById('outboxAlertCard'),
+    outboxStatusText: document.getElementById('outboxStatusText'),
+    resendEmailBtn: document.getElementById('resendEmailBtn'),
+    resendToolbarBtn: document.getElementById('resendToolbarBtn'),
+    editResendBtn: document.getElementById('editResendBtn'),
     detailSubject: document.getElementById('detailSubject'),
     detailAccountBadge: document.getElementById('detailAccountBadge'),
     detailStatusBadge: document.getElementById('detailStatusBadge'),
@@ -166,16 +172,6 @@
     composeMessageInput: document.getElementById('composeMessageInput'),
     submitSendBtn: document.getElementById('submitSendBtn'),
 
-    // Inbound Simulator Modal
-    inboundModal: document.getElementById('inboundModal'),
-    closeInboundBtn: document.getElementById('closeInboundBtn'),
-    cancelInboundBtn: document.getElementById('cancelInboundBtn'),
-    inboundSimForm: document.getElementById('inboundSimForm'),
-    inboundTargetAccount: document.getElementById('inboundTargetAccount'),
-    inboundSender: document.getElementById('inboundSender'),
-    inboundSubject: document.getElementById('inboundSubject'),
-    inboundMessage: document.getElementById('inboundMessage'),
-
     // Domain Info Modal
     domainModal: document.getElementById('domainModal'),
     closeDomainModalBtn: document.getElementById('closeDomainModalBtn'),
@@ -187,7 +183,7 @@
     toastContainer: document.getElementById('toastContainer')
   };
 
-  // Pre-built Quick Templates (100% English)
+  // Pre-built Quick Templates
   const templates = {
     welcome: {
       subject: 'Welcome to Judad KSA!',
@@ -276,6 +272,8 @@
       const totalInbox = totals.totalInbox ?? totals.inbox ?? 0;
       const unreadSent = totals.unreadSent ?? 0;
       const totalSent = totals.totalSent ?? totals.sent ?? 0;
+      const unreadOutbox = totals.unreadOutbox ?? 0;
+      const totalOutbox = totals.totalOutbox ?? totals.outbox ?? 0;
       const unreadTrash = totals.unreadTrash ?? 0;
       const totalTrash = totals.totalTrash ?? totals.trash ?? 0;
 
@@ -283,6 +281,16 @@
       updateBadgeElement(elements.badgeAllInbox, unreadInbox, totalInbox, 'All Inboxes');
       updateBadgeElement(elements.currentFolderInboxBadge, unreadInbox, totalInbox, 'Inbox');
       updateBadgeElement(elements.currentFolderSentBadge, unreadSent, totalSent, 'Sent');
+
+      if (elements.currentFolderOutboxBadge) {
+        updateBadgeElement(elements.currentFolderOutboxBadge, unreadOutbox, totalOutbox, 'Outbox (Bounced/Failed)');
+        if (totalOutbox > 0) {
+          elements.currentFolderOutboxBadge.classList.add('has-outbox');
+        } else {
+          elements.currentFolderOutboxBadge.classList.remove('has-outbox');
+        }
+      }
+
       updateBadgeElement(elements.currentFolderTrashBadge, unreadTrash, totalTrash, 'Trash');
 
       renderAccountList();
@@ -366,6 +374,7 @@
   function updateViewTitle() {
     let folderName = 'Inbox';
     if (state.currentFolder === 'sent') folderName = 'Sent';
+    if (state.currentFolder === 'outbox') folderName = 'Outbox';
     if (state.currentFolder === 'trash') folderName = 'Trash';
 
     let accountName = 'All Accounts';
@@ -434,6 +443,8 @@
           msg = `No results found for "${state.searchQuery}".`;
         } else if (state.currentFilter === 'unread') {
           msg = 'No unread emails in this folder.';
+        } else if (state.currentFolder === 'outbox') {
+          msg = 'No bounced or failed emails in Outbox. All outgoing messages were delivered successfully!';
         }
 
         elements.emailItemsContainer.innerHTML = `
@@ -443,18 +454,8 @@
               <line x1="8" y1="12" x2="16" y2="12"></line>
             </svg>
             <p>${msg}</p>
-            ${state.currentFolder === 'inbox' && state.currentFilter === 'all' ? `
-              <button class="btn btn-sm btn-primary" id="btnEmptySimulate">
-                Send a test email to your inbox
-              </button>
-            ` : ''}
           </div>
         `;
-
-        const btnSim = document.getElementById('btnEmptySimulate');
-        if (btnSim) {
-          btnSim.addEventListener('click', openInboundModal);
-        }
 
         if (!state.emails.find(e => e.id === state.selectedEmailId)) {
           showPlaceholder();
@@ -470,7 +471,9 @@
         const sender = parseEmailAddress(email.from);
         const recipient = parseEmailAddress(Array.isArray(email.to) ? email.to[0] : email.to);
 
-        const contactName = state.currentFolder === 'sent' ? `To: ${recipient.name}` : sender.name;
+        const contactName = (state.currentFolder === 'sent' || state.currentFolder === 'outbox')
+          ? `To: ${recipient.name}`
+          : sender.name;
 
         let accType = 'info';
         if (email.account?.includes('admin')) accType = 'admin';
@@ -484,6 +487,8 @@
         }
         snippet = snippet.replace(/\s+/g, ' ').trim();
         if (snippet.length > 80) snippet = snippet.substring(0, 80) + '...';
+
+        const statusClass = email.status || 'sent';
 
         listHtml += `
           <div class="email-item ${isSelected ? 'active' : ''} ${isUnread ? 'unread' : ''}" data-id="${email.id}">
@@ -500,7 +505,7 @@
               <div class="email-item-snippet">${escapeHtml(snippet || 'No message preview available')}</div>
               <div class="email-item-badges">
                 <span class="pill-account ${accType}">${email.account || 'judadksa.com'}</span>
-                <span class="pill-status ${email.status || 'sent'}">${email.status || 'sent'}</span>
+                <span class="pill-status ${statusClass}">${email.status || 'sent'}</span>
               </div>
             </div>
           </div>
@@ -548,7 +553,6 @@
     });
 
     const local = state.emails.find(e => e.id === id || e.resend_id === id);
-    const wasUnread = local && !local.read;
     if (local) {
       local.read = true;
     }
@@ -604,6 +608,27 @@
 
     elements.detailResendId.innerText = email.resend_id || email.id;
     elements.toggleReadLabel.innerText = email.read ? 'Mark Unread' : 'Mark Read';
+
+    // Outbox Alert Banner & Resend Action Buttons
+    const isOutboxEmail = email.folder === 'outbox' || email.status === 'bounced' || email.status === 'failed' || email.status === 'delivery_delayed';
+    if (isOutboxEmail) {
+      if (elements.outboxAlertCard) {
+        elements.outboxAlertCard.style.display = 'flex';
+        if (elements.outboxStatusText) {
+          elements.outboxStatusText.innerText = (email.status || 'FAILED').toUpperCase();
+        }
+      }
+      if (elements.resendToolbarBtn) {
+        elements.resendToolbarBtn.style.display = 'inline-flex';
+      }
+    } else {
+      if (elements.outboxAlertCard) {
+        elements.outboxAlertCard.style.display = 'none';
+      }
+      if (elements.resendToolbarBtn) {
+        elements.resendToolbarBtn.style.display = 'none';
+      }
+    }
   }
 
   function showPlaceholder() {
@@ -651,15 +676,19 @@
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to send email');
+        if (data.savedToOutbox) {
+          showToast(`Sending failed: ${data.error}. Saved to Outbox.`, 'error', 6000);
+          switchFolder('outbox');
+        } else {
+          throw new Error(data.error || 'Failed to send email');
+        }
+      } else {
+        showToast(`Email sent successfully from ${from}`, 'success');
+        switchFolder('sent');
       }
 
-      showToast(`Email sent successfully from ${from}`, 'success');
       closeComposeModal();
-
       elements.composeForm.reset();
-
-      switchFolder('sent');
       loadAccounts();
       loadEmails();
     } catch (err) {
@@ -672,52 +701,63 @@
     }
   }
 
-  // 5. Inbound Simulator
-  async function handleInboundSimulate(e) {
-    e.preventDefault();
+  // 5. Resend Bounced / Failed Email
+  async function handleResendEmail() {
+    if (!state.currentEmailData) return;
+    const id = state.currentEmailData.id;
 
-    const targetAccount = elements.inboundTargetAccount.value;
-    const from = elements.inboundSender.value.trim();
-    const subject = elements.inboundSubject.value.trim();
-    const message = elements.inboundMessage.value.trim();
+    const btn = elements.resendEmailBtn;
+    const toolbarBtn = elements.resendToolbarBtn;
+
+    if (btn) btn.disabled = true;
+    if (toolbarBtn) toolbarBtn.disabled = true;
+    showToast('Attempting to resend via Resend API...', 'info');
 
     try {
-      const res = await fetch('/api/emails/simulate-inbound', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account: targetAccount,
-          from,
-          subject,
-          message
-        })
-      });
-
+      const res = await fetch(`/api/emails/${id}/resend`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Simulation failed');
 
-      showToast(`Test email received into ${targetAccount} inbox!`, 'success');
-      closeInboundModal();
+      if (!res.ok) {
+        throw new Error(data.error || 'Resend delivery failed');
+      }
 
-      switchFolder('inbox');
+      showToast('Email resent successfully and moved to Sent!', 'success');
       await loadAccounts();
-      await loadEmails();
-
+      switchFolder('sent');
       if (data.email?.id) {
         selectEmail(data.email.id);
       }
     } catch (err) {
-      showToast(err.message, 'error');
+      console.error('Error resending email:', err);
+      showToast(err.message || 'Error resending email', 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+      if (toolbarBtn) toolbarBtn.disabled = false;
     }
   }
 
-  // 6. Sync with Resend (Syncs read IDs first, ensuring read state is preserved!)
+  // 6. Edit & Resend (pre-populates Compose Modal)
+  function handleEditAndResend() {
+    if (!state.currentEmailData) return;
+    const email = state.currentEmailData;
+    const toStr = Array.isArray(email.to) ? email.to.join(', ') : (email.to || '');
+
+    elements.composeToInput.value = toStr;
+    elements.composeSubjectInput.value = email.subject || '';
+    if (email.account && elements.composeFromSelect.querySelector(`option[value="${email.account}"]`)) {
+      elements.composeFromSelect.value = email.account;
+    }
+    elements.composeMessageInput.value = email.html || email.text || '';
+
+    openComposeModal();
+  }
+
+  // 7. Sync with Resend (Syncs read IDs first, ensuring read state is preserved!)
   async function handleSyncResend() {
     elements.syncResendBtn.disabled = true;
     showToast('Syncing live emails from Resend...', 'info');
 
     try {
-      // First ensure the server is primed with our stored read states
       await syncClientReadStatesWithServer();
 
       const res = await fetch('/api/emails/sync-resend', { method: 'POST' });
@@ -734,7 +774,7 @@
     }
   }
 
-  // 7. Delete / Move to trash
+  // 8. Delete / Move to trash
   async function handleDeleteEmail() {
     if (!state.selectedEmailId) return;
 
@@ -758,13 +798,12 @@
     }
   }
 
-  // 8. Toggle Read/Unread
+  // 9. Toggle Read/Unread
   async function handleToggleRead() {
     if (!state.currentEmailData) return;
     const id = state.currentEmailData.id;
     const targetStatus = !state.currentEmailData.read;
 
-    // Persist to localStorage
     if (targetStatus) {
       markEmailAsReadInStorage(id);
       if (state.currentEmailData.resend_id) markEmailAsReadInStorage(state.currentEmailData.resend_id);
@@ -814,7 +853,7 @@
     }
   }
 
-  // 9. Mark All Emails in Folder as Read
+  // 10. Mark All Emails in Folder as Read
   async function handleMarkAllRead() {
     try {
       const readSet = getStoredReadIds();
@@ -849,7 +888,7 @@
     }
   }
 
-  // 10. Reply Handler
+  // 11. Reply Handler
   function handleReply() {
     if (!state.currentEmailData) return;
     const email = state.currentEmailData;
@@ -867,7 +906,7 @@
     openComposeModal();
   }
 
-  // 11. Forward Handler
+  // 12. Forward Handler
   function handleForward() {
     if (!state.currentEmailData) return;
     const email = state.currentEmailData;
@@ -889,13 +928,14 @@
     state.currentFolder = folder;
     state.selectedEmailId = null;
 
-    [elements.folderInboxBtn, elements.folderSentBtn, elements.folderTrashBtn].forEach(btn => {
-      btn.classList.remove('active');
+    [elements.folderInboxBtn, elements.folderSentBtn, elements.folderOutboxBtn, elements.folderTrashBtn].forEach(btn => {
+      if (btn) btn.classList.remove('active');
     });
 
-    if (folder === 'inbox') elements.folderInboxBtn.classList.add('active');
-    if (folder === 'sent') elements.folderSentBtn.classList.add('active');
-    if (folder === 'trash') elements.folderTrashBtn.classList.add('active');
+    if (folder === 'inbox' && elements.folderInboxBtn) elements.folderInboxBtn.classList.add('active');
+    if (folder === 'sent' && elements.folderSentBtn) elements.folderSentBtn.classList.add('active');
+    if (folder === 'outbox' && elements.folderOutboxBtn) elements.folderOutboxBtn.classList.add('active');
+    if (folder === 'trash' && elements.folderTrashBtn) elements.folderTrashBtn.classList.add('active');
 
     updateViewTitle();
     loadEmails();
@@ -913,17 +953,6 @@
 
   function closeComposeModal() {
     elements.composeModal.style.display = 'none';
-  }
-
-  function openInboundModal() {
-    if (state.currentAccount !== 'all') {
-      elements.inboundTargetAccount.value = state.currentAccount;
-    }
-    elements.inboundModal.style.display = 'flex';
-  }
-
-  function closeInboundModal() {
-    elements.inboundModal.style.display = 'none';
   }
 
   function openDomainModal() {
@@ -949,6 +978,9 @@
   function setupEvents() {
     elements.folderInboxBtn.addEventListener('click', () => switchFolder('inbox'));
     elements.folderSentBtn.addEventListener('click', () => switchFolder('sent'));
+    if (elements.folderOutboxBtn) {
+      elements.folderOutboxBtn.addEventListener('click', () => switchFolder('outbox'));
+    }
     elements.folderTrashBtn.addEventListener('click', () => switchFolder('trash'));
 
     elements.filterAllBtn.addEventListener('click', () => {
@@ -967,6 +999,16 @@
 
     if (elements.markAllReadBtn) {
       elements.markAllReadBtn.addEventListener('click', handleMarkAllRead);
+    }
+
+    if (elements.resendEmailBtn) {
+      elements.resendEmailBtn.addEventListener('click', handleResendEmail);
+    }
+    if (elements.resendToolbarBtn) {
+      elements.resendToolbarBtn.addEventListener('click', handleResendEmail);
+    }
+    if (elements.editResendBtn) {
+      elements.editResendBtn.addEventListener('click', handleEditAndResend);
     }
 
     let searchTimeout = null;
@@ -990,7 +1032,6 @@
 
     elements.openComposeBtn.addEventListener('click', () => openComposeModal());
     elements.emptyComposeTrigger.addEventListener('click', () => openComposeModal());
-    elements.simulateInboundBtn.addEventListener('click', openInboundModal);
     elements.syncResendBtn.addEventListener('click', handleSyncResend);
     elements.domainInfoBtn.addEventListener('click', openDomainModal);
     elements.domainStatusPill.addEventListener('click', openDomainModal);
@@ -998,15 +1039,12 @@
     elements.closeComposeBtn.addEventListener('click', closeComposeModal);
     elements.cancelComposeBtn.addEventListener('click', closeComposeModal);
 
-    elements.closeInboundBtn.addEventListener('click', closeInboundModal);
-    elements.cancelInboundBtn.addEventListener('click', closeInboundModal);
-
     elements.closeDomainModalBtn.addEventListener('click', closeDomainModal);
     elements.confirmDomainModalBtn.addEventListener('click', closeDomainModal);
 
     elements.copyWebhookBtn.addEventListener('click', copyWebhookUrl);
 
-    [elements.composeModal, elements.inboundModal, elements.domainModal].forEach(modal => {
+    [elements.composeModal, elements.domainModal].forEach(modal => {
       modal.addEventListener('click', (e) => {
         if (e.target === modal) modal.style.display = 'none';
       });
@@ -1024,7 +1062,6 @@
     });
 
     elements.composeForm.addEventListener('submit', handleSendEmail);
-    elements.inboundSimForm.addEventListener('submit', handleInboundSimulate);
 
     elements.replyBtn.addEventListener('click', handleReply);
     elements.forwardBtn.addEventListener('click', handleForward);
@@ -1034,7 +1071,6 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         elements.composeModal.style.display = 'none';
-        elements.inboundModal.style.display = 'none';
         elements.domainModal.style.display = 'none';
       }
       if (e.key === 'c' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
@@ -1047,7 +1083,6 @@
   async function init() {
     setupEvents();
     updateViewTitle();
-    // Synchronize local read IDs to server to ensure zero state regression
     await syncClientReadStatesWithServer();
     await loadAccounts();
     await loadEmails();

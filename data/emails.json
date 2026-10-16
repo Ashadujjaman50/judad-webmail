@@ -1,6 +1,22 @@
 {
   "emails": [
     {
+      "id": "01a14410-7e68-765a-ba30-2e4dabb8f501",
+      "resend_id": "01a14410-7e68-765a-ba30-2e4dabb8f501",
+      "folder": "sent",
+      "account": "support@judadksa.com",
+      "from": "\"Judad Support\" <support@judadksa.com>",
+      "to": [
+        "ashadujjaman.bms@gmail.com"
+      ],
+      "subject": "Official Quotation & Service Proposal - Judad KSA",
+      "html": null,
+      "text": null,
+      "status": "delivered",
+      "read": true,
+      "created_at": "2026-10-16 09:34:54.228000+00"
+    },
+    {
       "id": "01a1406f-daa7-7673-bf8f-b842de8b0da4",
       "resend_id": "01a1406f-daa7-7673-bf8f-b842de8b0da4",
       "folder": "sent",
@@ -79,22 +95,6 @@
       "status": "delivered",
       "read": true,
       "created_at": "2026-10-15T17:50:07.837Z"
-    },
-    {
-      "id": "b86ba276-22a5-494e-9c80-be22c692ce55",
-      "resend_id": "b86ba276-22a5-494e-9c80-be22c692ce55",
-      "folder": "inbox",
-      "account": "admin@judadksa.com",
-      "from": "hanifsanket88@gmail.com",
-      "to": [
-        "admin@judadksa.com"
-      ],
-      "subject": "Test mail",
-      "html": "<div dir=\"auto\">Hello Bangladesh</div>\n",
-      "text": "Hello Bangladesh\n",
-      "status": "delivered",
-      "read": true,
-      "created_at": "2026-10-15T18:41:50.493Z"
     }
   ]
 }
